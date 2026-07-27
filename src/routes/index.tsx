@@ -1,5 +1,5 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute } from "@tanstack/react-router";
 
-import BrewBookApp from '#/brewbook-app'
+import BrewBookApp from "#/brewbook-app";
 
-export const Route = createFileRoute('/')({ component: BrewBookApp })
+export const Route = createFileRoute("/")({ component: BrewBookApp });

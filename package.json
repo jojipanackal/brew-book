@@ -13,6 +13,7 @@
     "dev": "vite dev --port 3000",
     "generate-routes": "tsr generate",
     "build": "vite build",
+    "test": "node --import tsx --test src/lib/*.test.ts",
     "preview": "vite preview",
     "start": "node --import ./sentry.server.mjs .output/server/index.mjs",
     "format": "biome format",

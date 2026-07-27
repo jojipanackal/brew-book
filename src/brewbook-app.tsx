@@ -9,13 +9,17 @@ import {
 	Eye,
 	History,
 	LogOut,
+	Search,
 	ShieldCheck,
 	SlidersHorizontal,
 	X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { BrewSummary, DrinkGlyph, SaveStatus } from "#/components/brew-visuals";
 import { authClient } from "#/lib/auth-client";
+import { displayDate, getDateKey, shiftDateKey } from "#/lib/date";
+import { createDemoPolls, demoUser } from "#/lib/demo";
 import {
 	type AdminDashboard,
 	type Company,
@@ -44,6 +48,11 @@ import {
 	updateUserResponse,
 } from "#/lib/drinks";
 import {
+	countChoices,
+	mergePendingPollResponses,
+	upsertPollResponse,
+} from "#/lib/polls";
+import {
 	captureSentryException,
 	initSentryClient,
 	syncSentryUser,
@@ -68,17 +77,6 @@ const periodDetails: Array<{ id: Period; label: string; helper: string }> = [
 	{ id: "morning", label: "Morning", helper: "Before the first prep round" },
 	{ id: "evening", label: "Evening", helper: "For the afternoon round" },
 ];
-const dateFormatter = new Intl.DateTimeFormat("en-CA", {
-	timeZone: "Asia/Kolkata",
-});
-const displayDateFormatter = new Intl.DateTimeFormat("en-US", {
-	weekday: "short",
-	month: "short",
-	day: "numeric",
-	year: "numeric",
-	timeZone: "Asia/Kolkata",
-});
-const todayKey = dateFormatter.format(new Date());
 const initialState: AppState = {
 	user: null,
 	defaults: { morning: "No drink", evening: "No drink" },
@@ -95,17 +93,7 @@ const sourceFilters: Array<PollSource | "all"> = [
 initSentryClient();
 
 function dateKeyOffset(offset: number) {
-	const date = new Date();
-	date.setDate(date.getDate() - offset);
-	return dateFormatter.format(date);
-}
-function shiftDateKey(dateKey: string, offset: number) {
-	const date = new Date(`${dateKey}T12:00:00`);
-	date.setDate(date.getDate() + offset);
-	return dateFormatter.format(date);
-}
-function displayDate(dateKey: string) {
-	return displayDateFormatter.format(new Date(`${dateKey}T12:00:00`));
+	return shiftDateKey(getDateKey(), -offset);
 }
 function isGuestUser(user: User) {
 	return (
@@ -135,7 +123,13 @@ function sourceLabel(source: PollSource) {
 			? "Manual"
 			: "Default";
 }
-function MetaTag({ children, muted = false }: { children: React.ReactNode; muted?: boolean }) {
+function MetaTag({
+	children,
+	muted = false,
+}: {
+	children: React.ReactNode;
+	muted?: boolean;
+}) {
 	return (
 		<span
 			className={cx(
@@ -160,23 +154,6 @@ function readState(): AppState {
 }
 function cx(...classes: Array<string | false | null | undefined>) {
 	return classes.filter(Boolean).join(" ");
-}
-function countChoices(entries: DrinkChoice[]) {
-	return periods.reduce(
-		(result, period) => {
-			result[period] = drinks.reduce<Record<string, number>>(
-				(counts, drink) => {
-					counts[drink] = entries.filter(
-						(entry) => entry[period] === drink,
-					).length;
-					return counts;
-				},
-				{},
-			);
-			return result;
-		},
-		{} as Record<Period, Record<string, number>>,
-	);
 }
 function reportSentryError(reason: unknown, fallbackMessage: string) {
 	captureSentryException(reason);
@@ -203,6 +180,7 @@ function AppErrorFallback() {
 }
 
 function App() {
+	const todayKey = getDateKey();
 	const [state, setState] = useState<AppState>(readState);
 	const [view, setView] = useState<View>("today");
 	const [historyDate, setHistoryDate] = useState(dateKeyOffset(1));
@@ -212,12 +190,19 @@ function App() {
 	const [profileReady, setProfileReady] = useState(false);
 	const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
 	const [localUser, setLocalUser] = useState<User | null>(null);
-	const [localComplete, setLocalComplete] = useState(false);
 	const [guestSession, setGuestSession] = useState<GuestSession | null>(null);
 	const [guestPending, setGuestPending] = useState(true);
 	const [guestSetup, setGuestSetup] = useState(false);
 	const [accessDenied, setAccessDenied] = useState(false);
 	const [adminData, setAdminData] = useState<AdminDashboard | null>(null);
+	const [saveState, setSaveState] = useState<
+		Partial<Record<Period, "saving" | "saved">>
+	>({});
+	const saveVersion = useRef<Record<Period, number>>({
+		morning: 0,
+		evening: 0,
+	});
+	const pendingResponsePeriods = useRef(new Set<Period>());
 	const { data: session, isPending: authPending } = authClient.useSession();
 	const sessionUserId = session?.user?.id;
 	const sessionUserName = session?.user?.name;
@@ -374,6 +359,7 @@ function App() {
 		sessionUserId,
 		sessionUserImage,
 		sessionUserName,
+		todayKey,
 	]);
 	useEffect(() => {
 		if (!state.user?.role || state.user.role !== "admin" || view !== "admin")
@@ -396,7 +382,19 @@ function App() {
 						...current,
 						defaults: day.defaults,
 						sugarDefaults: day.sugarDefaults,
-						entries: { ...current.entries, [todayKey]: day.responses },
+						entries: {
+							...current.entries,
+							[todayKey]: current.user
+								? mergePendingPollResponses({
+										serverPolls: day.responses,
+										currentPolls: current.entries[todayKey] ?? [],
+										user: current.user,
+										defaults: current.defaults,
+										sugarDefaults: current.sugarDefaults,
+										pendingPeriods: pendingResponsePeriods.current,
+									})
+								: day.responses,
+						},
 					}));
 					setError(null);
 				})
@@ -410,7 +408,7 @@ function App() {
 			cancelled = true;
 			window.clearInterval(interval);
 		};
-	}, [guestSession, profileReady, sessionUserId, view]);
+	}, [guestSession, profileReady, sessionUserId, todayKey, view]);
 	useEffect(() => {
 		if (state.user?.role !== "admin" || view !== "admin") return;
 		let cancelled = false;
@@ -499,16 +497,12 @@ function App() {
 		setAccessDenied(false);
 		setAdminData(null);
 		setLocalUser(null);
-		setLocalComplete(false);
+		setSaveState({});
+		pendingResponsePeriods.current.clear();
 		setState((current) => ({ ...current, user: null }));
 	}
 	function signUpLocally() {
-		setLocalComplete(false);
-		setLocalUser({
-			id: "local-test-user",
-			name: "Local test user",
-			email: "local@brewbook.test",
-		});
+		setLocalUser(demoUser);
 	}
 	async function finishGuestSetup(name: string, company: Company) {
 		try {
@@ -528,8 +522,21 @@ function App() {
 		const currentOnboarding = onboarding;
 		if (!currentOnboarding?.company) return;
 		if (localUser) {
+			const demoPolls = createDemoPolls(
+				localUser,
+				currentOnboarding.defaults,
+				currentOnboarding.sugarDefaults,
+			);
+			setState({
+				user: localUser,
+				defaults: currentOnboarding.defaults,
+				sugarDefaults: currentOnboarding.sugarDefaults,
+				entries: {
+					[todayKey]: demoPolls,
+					[shiftDateKey(todayKey, -1)]: demoPolls,
+				},
+			});
 			setOnboarding(null);
-			setLocalComplete(true);
 			return;
 		}
 		try {
@@ -553,54 +560,121 @@ function App() {
 			);
 		}
 	}
-	function updateEntry(period: Period, drink: Drink) {
+	function persistResponse(period: Period, drink: Drink, sugar: boolean) {
 		if (!state.user) return;
-		const existing = state.entries[todayKey]?.find(
-			(entry) => entry.user.email === state.user?.email,
+		const existing = state.entries[todayKey]?.find((entry) =>
+			entry.user.id
+				? entry.user.id === state.user?.id
+				: entry.user.email === state.user?.email,
 		);
-		const choices = {
-			...(existing?.choices ?? state.defaults),
-			[period]: drink,
-		};
-		const sugar = existing?.sugar?.[period] ?? state.sugarDefaults[period];
+		const previousDrink = existing?.choices[period] ?? state.defaults[period];
+		const previousSugar =
+			existing?.sugar[period] ?? state.sugarDefaults[period];
+		const previousSource = existing?.sources[period] ?? "default";
+		const version = saveVersion.current[period] + 1;
+		saveVersion.current[period] = version;
+		pendingResponsePeriods.current.add(period);
+
 		setState((current) => {
 			if (!current.user) return current;
-			const nextEntries = (current.entries[todayKey] ?? []).map((entry) =>
-				entry.user.email === current.user?.email
-					? {
-							...entry,
-							choices,
-							sugar: { ...entry.sugar, [period]: sugar },
-							sources: { ...entry.sources, [period]: "manual" as const },
-						}
-					: entry,
-			);
 			return {
 				...current,
-				entries: { ...current.entries, [todayKey]: nextEntries },
+				entries: {
+					...current.entries,
+					[todayKey]: upsertPollResponse({
+						polls: current.entries[todayKey] ?? [],
+						user: current.user,
+						defaults: current.defaults,
+						sugarDefaults: current.sugarDefaults,
+						period,
+						drink,
+						sugar,
+					}),
+				},
 			};
 		});
+		setSaveState((current) => ({ ...current, [period]: "saving" }));
+		if (localUser) {
+			pendingResponsePeriods.current.delete(period);
+			setSaveState((current) => ({ ...current, [period]: "saved" }));
+			return;
+		}
+
 		void saveResponse({ date: todayKey, period, drink, sugar })
 			.then((day) => {
-				setState((current) => ({
-					...current,
-					defaults: day.defaults,
-					sugarDefaults: day.sugarDefaults,
-					entries: { ...current.entries, [todayKey]: day.responses },
-				}));
+				if (saveVersion.current[period] !== version) return;
+				pendingResponsePeriods.current.delete(period);
+				setState((current) => {
+					const responses = current.user
+						? mergePendingPollResponses({
+								serverPolls: day.responses,
+								currentPolls: current.entries[todayKey] ?? [],
+								user: current.user,
+								defaults: current.defaults,
+								sugarDefaults: current.sugarDefaults,
+								pendingPeriods: pendingResponsePeriods.current,
+							})
+						: day.responses;
+					return {
+						...current,
+						defaults: day.defaults,
+						sugarDefaults: day.sugarDefaults,
+						entries: { ...current.entries, [todayKey]: responses },
+					};
+				});
+				setSaveState((current) => ({ ...current, [period]: "saved" }));
 				setError(null);
 			})
-			.catch((reason: unknown) =>
-				setError(reportSentryError(reason, "Unable to save your drink")),
-			);
+			.catch((reason: unknown) => {
+				if (saveVersion.current[period] !== version) return;
+				pendingResponsePeriods.current.delete(period);
+				setState((current) => {
+					if (!current.user) return current;
+					return {
+						...current,
+						entries: {
+							...current.entries,
+							[todayKey]: upsertPollResponse({
+								polls: current.entries[todayKey] ?? [],
+								user: current.user,
+								defaults: current.defaults,
+								sugarDefaults: current.sugarDefaults,
+								period,
+								drink: previousDrink,
+								sugar: previousSugar,
+								source: previousSource,
+							}),
+						},
+					};
+				});
+				setSaveState((current) => {
+					const next = { ...current };
+					delete next[period];
+					return next;
+				});
+				setError(reportSentryError(reason, "Unable to save your drink"));
+			});
+	}
+
+	function updateEntry(period: Period, drink: Drink) {
+		const existing = state.entries[todayKey]?.find((entry) =>
+			entry.user.id
+				? entry.user.id === state.user?.id
+				: entry.user.email === state.user?.email,
+		);
+		const sugar = existing?.sugar[period] ?? state.sugarDefaults[period];
+		persistResponse(period, drink, sugar);
 	}
 
 	function updateDefault(period: Period, drink: Drink, sugar: boolean) {
+		const previousDrink = state.defaults[period];
+		const previousSugar = state.sugarDefaults[period];
 		setState((current) => ({
 			...current,
 			defaults: { ...current.defaults, [period]: drink },
 			sugarDefaults: { ...current.sugarDefaults, [period]: sugar },
 		}));
+		if (localUser) return;
 		void saveDefault({ period, drink, sugar })
 			.then((settings) => {
 				setState((current) => ({
@@ -610,44 +684,26 @@ function App() {
 				}));
 				setError(null);
 			})
-			.catch((reason: unknown) =>
-				setError(reportSentryError(reason, "Unable to save your default")),
-			);
-	}
-	function updateSugar(period: Period, sugar: boolean) {
-		if (!state.user) return;
-		const existing = state.entries[todayKey]?.find(
-			(entry) => entry.user.email === state.user?.email,
-		);
-		const drink = existing?.choices[period] ?? state.defaults[period];
-		setState((current) => ({
-			...current,
-			entries: {
-				...current.entries,
-				[todayKey]: (current.entries[todayKey] ?? []).map((entry) =>
-					entry.user.email === current.user?.email
-						? {
-								...entry,
-								sugar: { ...entry.sugar, [period]: sugar },
-								sources: { ...entry.sources, [period]: "manual" as const },
-							}
-						: entry,
-				),
-			},
-		}));
-		void saveResponse({ date: todayKey, period, drink, sugar })
-			.then((day) => {
+			.catch((reason: unknown) => {
 				setState((current) => ({
 					...current,
-					defaults: day.defaults,
-					sugarDefaults: day.sugarDefaults,
-					entries: { ...current.entries, [todayKey]: day.responses },
+					defaults: { ...current.defaults, [period]: previousDrink },
+					sugarDefaults: {
+						...current.sugarDefaults,
+						[period]: previousSugar,
+					},
 				}));
-				setError(null);
-			})
-			.catch((reason: unknown) =>
-				setError(reportSentryError(reason, "Unable to save sugar preference")),
-			);
+				setError(reportSentryError(reason, "Unable to save your default"));
+			});
+	}
+	function updateSugar(period: Period, sugar: boolean) {
+		const existing = state.entries[todayKey]?.find((entry) =>
+			entry.user.id
+				? entry.user.id === state.user?.id
+				: entry.user.email === state.user?.email,
+		);
+		const drink = existing?.choices[period] ?? state.defaults[period];
+		persistResponse(period, drink, sugar);
 	}
 
 	if (authPending || guestPending) return <AuthLoading />;
@@ -673,7 +729,6 @@ function App() {
 				onLocalSignUp={import.meta.env.DEV ? signUpLocally : undefined}
 			/>
 		);
-	if (localComplete) return <LocalSetupComplete onReset={signOut} />;
 	if (!state.user) return <AuthLoading />;
 	if (!profileReady) return <AuthLoading message="Loading your workspace..." />;
 	if (accessDenied) return <AccessDeniedPage onSignOut={signOut} />;
@@ -704,11 +759,16 @@ function App() {
 			>
 				<header className="border-b border-[#e6e0d6] bg-[#fffdf9]">
 					<div className="mx-auto flex max-w-[1180px] items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
-					<div className="flex items-center gap-2.5">
-						<BrandMark />
-						<span className="font-serif text-xl font-semibold tracking-[-0.02em]">
-							MyBev
-						</span>
+						<div className="flex items-center gap-2.5">
+							<BrandMark />
+							<span className="font-serif text-xl font-semibold tracking-[-0.02em]">
+								MyBev
+							</span>
+							{localUser && (
+								<span className="rounded-full bg-[#e7f0da] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#4e653b]">
+									Demo
+								</span>
+							)}
 						</div>
 						<div className="relative">
 							<button
@@ -771,8 +831,10 @@ function App() {
 							<TodayView
 								guest={isGuest}
 								entry={todaysEntry}
+								saveState={saveState}
 								sugar={todaysSugar}
 								todayPolls={todayPolls}
+								userName={state.user.name}
 								updateEntry={updateEntry}
 								updateSugar={updateSugar}
 								onOpen={(period) => setOpenPoll({ date: todayKey, period })}
@@ -1244,7 +1306,7 @@ function SignInPage({
 	signIn,
 	onGuest,
 	onLocalSignUp,
-	}: {
+}: {
 	signIn: () => void;
 	onGuest: () => void;
 	onLocalSignUp?: () => void;
@@ -1272,7 +1334,7 @@ function SignInPage({
 				/>
 				<h1 className="mt-7 font-serif text-5xl leading-tight">MyBev</h1>
 				<p className="mt-4 max-w-xs text-[15px] leading-6 text-[#e7d8c4]">
-					Use your work email to continue.
+					One shared order. Zero drink-round chaos.
 				</p>
 				<button
 					onClick={signIn}
@@ -1294,9 +1356,9 @@ function SignInPage({
 					<button
 						onClick={onLocalSignUp}
 						type="button"
-						className="mt-2 text-xs font-semibold text-[#e7d8c4] underline decoration-[#c9ad90] underline-offset-4"
+						className="mt-3 rounded-full border border-[#a98568] px-3 py-1.5 text-xs font-semibold text-[#f2e6d8] transition hover:bg-white/10"
 					>
-						Sign up locally
+						Explore interactive demo
 					</button>
 				)}
 			</section>
@@ -1304,7 +1366,13 @@ function SignInPage({
 	);
 }
 
-function AccessDeniedPage({ authError = false, onSignOut }: { authError?: boolean; onSignOut?: () => void }) {
+function AccessDeniedPage({
+	authError = false,
+	onSignOut,
+}: {
+	authError?: boolean;
+	onSignOut?: () => void;
+}) {
 	return (
 		<main className="grid min-h-svh place-items-center bg-[#f6f5f1] px-5 text-[#33271f]">
 			<section className="w-full max-w-sm rounded-3xl bg-[#fffdf9] p-8 text-center shadow-[0_20px_60px_rgba(77,57,38,0.1)]">
@@ -1315,8 +1383,8 @@ function AccessDeniedPage({ authError = false, onSignOut }: { authError?: boolea
 				</p>
 				{authError ? (
 					<a
-					href="/"
-					className="mt-7 inline-flex min-h-11 items-center rounded-xl bg-[#5a3c26] px-5 text-sm font-semibold text-white"
+						href="/"
+						className="mt-7 inline-flex min-h-11 items-center rounded-xl bg-[#5a3c26] px-5 text-sm font-semibold text-white"
 					>
 						Back to MyBev
 					</a>
@@ -1470,59 +1538,42 @@ function OnboardingPage({
 		</main>
 	);
 }
-function LocalSetupComplete({ onReset }: { onReset: () => void }) {
-	return (
-		<main className="grid min-h-svh place-items-center bg-[#f6f5f1] px-5 py-10 text-[#33271f]">
-			<section className="w-full max-w-sm rounded-3xl bg-[#fffdf9] p-8 text-center shadow-[0_20px_60px_rgba(77,57,38,0.1)]">
-				<div className="mx-auto grid size-14 place-items-center rounded-2xl bg-[#5a3c26] text-[#fff9ef]">
-					<Check size={26} />
-				</div>
-				<h1 className="mt-6 font-serif text-3xl">Setup complete</h1>
-				<p className="mt-2 text-sm leading-6 text-[#887f74]">
-					The local test flow is complete. The app is not loaded in local signup
-					mode.
-				</p>
-				<button
-					onClick={onReset}
-					type="button"
-					className="mt-7 min-h-11 rounded-xl bg-[#5a3c26] px-4 text-sm font-semibold text-white"
-				>
-					Run setup again
-				</button>
-			</section>
-		</main>
-	);
-}
 function TodayView({
 	entry,
+	saveState,
 	sugar,
 	todayPolls,
+	userName,
 	updateEntry,
 	updateSugar,
 	onOpen,
 	guest = false,
 }: {
 	entry: DrinkChoice;
+	saveState: Partial<Record<Period, "saving" | "saved">>;
 	sugar: SugarChoice;
 	todayPolls: PollRecord[];
+	userName: string;
 	updateEntry: (period: Period, drink: Drink) => void;
 	updateSugar: (period: Period, sugar: boolean) => void;
 	onOpen: (period: Period) => void;
 	guest?: boolean;
 }) {
 	return (
-		<div className="grid gap-5">
+		<div className="grid gap-6">
 			<PageHeader
-				eyebrow={displayDate(todayKey)}
+				eyebrow={displayDate(getDateKey())}
 				title="Today"
 				action={`${todayPolls.length} people`}
 			/>
-			<div className="grid gap-3">
+			<BrewSummary polls={todayPolls} userName={userName} />
+			<div className="grid gap-4 xl:grid-cols-2">
 				{periodDetails.map((period) => (
 					<DrinkPoll
 						key={period.id}
 						period={period}
 						polls={todayPolls}
+						saveState={saveState[period.id]}
 						selected={entry[period.id]}
 						sugar={sugar[period.id]}
 						editable
@@ -1545,7 +1596,7 @@ function HistoryView({
 	polls: PollRecord[];
 }) {
 	const nextDate = shiftDateKey(date, 1);
-	const canMoveForward = nextDate < todayKey;
+	const canMoveForward = nextDate < getDateKey();
 	return (
 		<div className="grid gap-5">
 			<PageHeader
@@ -1822,6 +1873,7 @@ function SugarToggle({
 function DrinkPoll({
 	period,
 	polls,
+	saveState,
 	selected,
 	sugar,
 	editable,
@@ -1831,6 +1883,7 @@ function DrinkPoll({
 }: {
 	period: { id: Period; label: string; helper: string };
 	polls: PollRecord[];
+	saveState?: "saving" | "saved";
 	selected?: Drink;
 	sugar: boolean;
 	editable: boolean;
@@ -1838,13 +1891,16 @@ function DrinkPoll({
 	onToggleSugar?: (sugar: boolean) => void;
 	onOpen?: () => void;
 }) {
-	const counts = countChoices(polls.map((entry) => entry.choices))[period.id];
+	const counts = countChoices(polls)[period.id];
 	const total = polls.length;
 	return (
-		<div className="overflow-hidden rounded-2xl border border-[#e6e0d6] bg-[#fffdf9] shadow-[0_8px_30px_rgba(77,57,38,0.04)]">
-			<div className="flex items-center justify-between gap-4 border-b border-[#eee8df] px-4 py-3.5 sm:px-5">
+		<section
+			aria-label={`${period.label} drink choices`}
+			className="overflow-hidden rounded-[24px] border border-[#e6e0d6] bg-[#fffdf9] shadow-[0_12px_36px_rgba(77,57,38,0.06)]"
+		>
+			<div className="flex items-start justify-between gap-4 border-b border-[#eee8df] px-4 py-4 sm:px-5">
 				<span className="flex items-center gap-2.5">
-					<span className="grid size-8 place-items-center rounded-lg bg-[#f1ede6] text-[#a36f43]">
+					<span className="grid size-9 place-items-center rounded-xl bg-[#f1ede6] text-[#a36f43]">
 						<Coffee size={16} />
 					</span>
 					<span>
@@ -1852,71 +1908,77 @@ function DrinkPoll({
 							{period.label}
 						</span>
 						<span className="block text-xs text-[#9a9084]">
-							{total} {total === 1 ? "response" : "responses"}
+							{period.helper}
 						</span>
 					</span>
 				</span>
-				<SugarToggle
-					compact
-					disabled={selected === "No drink"}
-					sugar={sugar}
-					onChange={onToggleSugar ?? (() => undefined)}
-				/>
+				<div className="flex flex-col items-end gap-2">
+					<SugarToggle
+						compact
+						disabled={selected === "No drink"}
+						sugar={sugar}
+						onChange={onToggleSugar ?? (() => undefined)}
+					/>
+					<SaveStatus state={saveState} />
+				</div>
 			</div>
-			<div className="grid gap-2 p-3 sm:p-4">
+			<div className="grid grid-cols-2 gap-2.5 p-3 sm:p-4">
 				{drinks.map((drink) => {
 					const count = counts[drink];
 					const percent = total ? Math.round((counts[drink] / total) * 100) : 0;
 					return (
 						<button
+							aria-pressed={selected === drink}
 							key={drink}
 							disabled={!editable}
 							onClick={() => onSelect?.(drink)}
 							type="button"
 							className={cx(
-								"relative flex min-h-11 items-center justify-between overflow-hidden rounded-xl border px-3.5 text-left text-sm font-semibold",
+								"relative flex min-h-[76px] items-center gap-2.5 overflow-hidden rounded-2xl border p-2.5 text-left text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-[#a36f43] focus-visible:ring-offset-2",
+								drink === "No drink" && "col-span-2",
+								selected === drink && "pr-8",
 								editable
-									? "transition hover:border-[#dbc9b6]"
+									? "transition hover:-translate-y-0.5 hover:border-[#dbc9b6] hover:shadow-sm"
 									: "cursor-default",
 								selected === drink
-									? "border-[#a36f43] bg-[#f6ece1] text-[#68452e]"
+									? "border-[#a36f43] bg-[#fbf0e5] text-[#68452e] shadow-[inset_0_0_0_1px_#a36f43]"
 									: "border-[#eee8df] text-[#665b50]",
 							)}
 						>
 							<span
-								className="absolute inset-y-0 left-0 bg-[#f6ece1] transition-all"
+								aria-hidden="true"
+								className="absolute bottom-0 left-0 h-1 bg-[#ead8c7]"
 								style={{
-									width: editable
-										? selected === drink
-											? "100%"
-											: "0%"
-										: `${percent}%`,
+									width: `${percent}%`,
 								}}
 							/>
-							<span className="relative">{drink}</span>
-							<span className="relative flex items-center gap-2 text-xs text-[#887f74]">
-								{count}
-								{selected === drink && (
-									<span className="grid size-5 place-items-center rounded-full bg-[#a36f43] text-white">
-										<Check size={13} strokeWidth={3} />
-									</span>
-								)}
+							<DrinkGlyph drink={drink} />
+							<span className="relative min-w-0 flex-1">
+								<span className="block text-[13px] leading-4">{drink}</span>
+								<span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9a9084]">
+									{count} {count === 1 ? "pick" : "picks"}
+								</span>
 							</span>
+							{selected === drink && (
+								<span className="absolute right-2 top-2 grid size-5 place-items-center rounded-full bg-[#a36f43] text-white">
+									<Check size={13} strokeWidth={3} />
+								</span>
+							)}
 						</button>
 					);
 				})}
 			</div>
 			{onOpen && (
 				<button
-					className="mx-3 mb-3 flex min-h-11 w-[calc(100%-1.5rem)] items-center justify-center gap-2 rounded-xl bg-[#5a3c26] text-sm font-semibold text-white transition hover:bg-[#68452e] sm:mx-4 sm:mb-4 sm:w-[calc(100%-2rem)]"
+					className="mx-3 mb-3 flex min-h-11 w-[calc(100%-1.5rem)] items-center justify-center gap-2 rounded-xl border border-[#dfd5c9] bg-[#f8f5f0] text-sm font-semibold text-[#68452e] transition hover:border-[#cdb9a4] hover:bg-[#f3ece4] sm:mx-4 sm:mb-4 sm:w-[calc(100%-2rem)]"
 					onClick={onOpen}
 					type="button"
 				>
 					<Eye size={16} />
-					View details
+					View {period.label.toLowerCase()} order · {total}
 				</button>
 			)}
-		</div>
+		</section>
 	);
 }
 
@@ -1932,11 +1994,25 @@ function PollDetailsSheet({
 	onClose: () => void;
 }) {
 	const [sourceFilter, setSourceFilter] = useState<PollSource | "all">("all");
+	const [query, setQuery] = useState("");
 	const periodInfo = periodDetails.find((item) => item.id === period);
-	const filteredPolls =
+	const sourcePolls =
 		sourceFilter === "all"
 			? polls
 			: polls.filter((item) => item.sources[period] === sourceFilter);
+	const normalizedQuery = query.trim().toLowerCase();
+	const filteredPolls = normalizedQuery
+		? sourcePolls.filter((item) =>
+				item.user.name.toLowerCase().includes(normalizedQuery),
+			)
+		: sourcePolls;
+	useEffect(() => {
+		const closeOnEscape = (event: KeyboardEvent) => {
+			if (event.key === "Escape") onClose();
+		};
+		window.addEventListener("keydown", closeOnEscape);
+		return () => window.removeEventListener("keydown", closeOnEscape);
+	}, [onClose]);
 	return (
 		<div className="fixed inset-0 z-30 flex items-end overscroll-none bg-[#2d2925]/10 p-0 sm:items-center sm:justify-center sm:p-4">
 			<button
@@ -1945,15 +2021,23 @@ function PollDetailsSheet({
 				type="button"
 				aria-label="Close poll details"
 			/>
-			<section className="relative z-10 flex max-h-[88svh] min-h-0 w-full flex-col rounded-t-3xl bg-[#fffdf9] px-4 pb-6 pt-3 shadow-2xl overscroll-contain sm:max-w-lg sm:rounded-2xl sm:p-6">
+			<section
+				aria-labelledby="poll-details-title"
+				aria-modal="true"
+				className="relative z-10 flex max-h-[88svh] min-h-0 w-full flex-col rounded-t-3xl bg-[#fffdf9] px-4 pb-6 pt-3 shadow-2xl overscroll-contain sm:max-w-lg sm:rounded-2xl sm:p-6"
+				role="dialog"
+			>
 				<div className="mx-auto mb-4 h-1 w-10 shrink-0 rounded-full bg-[#ddd3c7] sm:hidden" />
 				<div className="shrink-0 border-b border-[#eee8df] pb-4">
 					<div className="flex items-start justify-between">
 						<div>
 							<p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#a36f43]">
-								{date === todayKey ? "Today" : displayDate(date)}
+								{date === getDateKey() ? "Today" : displayDate(date)}
 							</p>
-							<h2 className="mt-1 font-serif text-2xl text-[#33271f]">
+							<h2
+								className="mt-1 font-serif text-2xl text-[#33271f]"
+								id="poll-details-title"
+							>
 								{periodInfo?.label ?? period}
 							</h2>
 							<p className="mt-1 text-sm text-[#9a9084]">
@@ -1987,8 +2071,28 @@ function PollDetailsSheet({
 							</button>
 						))}
 					</div>
+					<label className="relative mt-3 block">
+						<span className="sr-only">Search people</span>
+						<Search
+							aria-hidden="true"
+							className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9a9084]"
+							size={16}
+						/>
+						<input
+							className="h-10 w-full rounded-xl border border-[#e6e0d6] bg-[#f8f5f0] pl-9 pr-3 text-sm outline-none transition placeholder:text-[#aaa096] focus:border-[#a36f43] focus:bg-white"
+							onChange={(event) => setQuery(event.target.value)}
+							placeholder="Search people"
+							type="search"
+							value={query}
+						/>
+					</label>
 				</div>
 				<div className="mt-5 min-h-0 flex-1 grid gap-5 overflow-y-auto overscroll-contain pr-1 [touch-action:pan-y]">
+					{filteredPolls.length === 0 && (
+						<div className="rounded-2xl border border-dashed border-[#dbcfc1] px-4 py-8 text-center text-sm text-[#887f74]">
+							No matching responses.
+						</div>
+					)}
 					{drinks.map((drink) => {
 						const drinkPolls = filteredPolls.filter(
 							(item) => item.choices[period] === drink,
@@ -2021,8 +2125,12 @@ function PollDetailsSheet({
 												</span>
 											</div>
 											<span className="flex shrink-0 flex-wrap justify-end gap-1">
-												<MetaTag>{item.sugar[period] ? "Sugar" : "No sugar"}</MetaTag>
-												<MetaTag muted>{sourceLabel(item.sources[period])}</MetaTag>
+												<MetaTag>
+													{item.sugar[period] ? "Sugar" : "No sugar"}
+												</MetaTag>
+												<MetaTag muted>
+													{sourceLabel(item.sources[period])}
+												</MetaTag>
 											</span>
 										</div>
 									))}

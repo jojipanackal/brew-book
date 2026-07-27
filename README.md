@@ -12,6 +12,12 @@ pnpm dev
 
 The app runs at `http://localhost:3000`.
 
+In development, choose **Explore interactive demo** on the sign-in screen to
+walk through onboarding and use a fully seeded workspace without writing to the
+database. Demo drink changes, history, and defaults stay in memory and reset
+when the page reloads. If no local dotenvx private key is present, development
+automatically uses `.env.example`, so the demo starts without secret setup.
+
 Set these values in `.env.local`:
 
 - `DATABASE_URL`: hosted Postgres connection string.
@@ -56,6 +62,8 @@ Sentry is initialized in the browser app, the server runtime, and the Vite build
 ```bash
 pnpm dev       # start the TanStack Start dev server
 pnpm build     # generate routes and build the app
+pnpm test      # run date and poll behavior tests
+pnpm check     # run formatting and lint checks
 pnpm lint      # run Biome linting
 pnpm format    # format source files with Biome
 ```
