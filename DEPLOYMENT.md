@@ -1,10 +1,10 @@
 # BrewBook Deployment
 
-BrewBook follows the same deployment shape as `dev-utils`:
+BrewBook follows this deployment shape:
 
 1. GitHub Actions builds a production Docker image.
 2. The image is pushed to GitHub Container Registry.
-3. GitHub Actions temporarily allows its runner IP through the DigitalOcean database firewall and runs Drizzle migrations.
+3. GitHub Actions runs Drizzle migrations against the database URL configured in the repository secret.
 4. GitHub Actions uploads `docker-compose.yml` to the VPS.
 5. The VPS pulls the new image and restarts the container.
 
@@ -14,22 +14,19 @@ Add these repository secrets under **Settings > Secrets and variables > Actions*
 
 | Secret | Purpose |
 | --- | --- |
-| `DO_API_TOKEN` | DigitalOcean API token used to manage the database firewall. |
-| `DO_DATABASE_ID` | DigitalOcean Managed Database cluster ID. |
-| `DO_DB_CERT` | DigitalOcean PostgreSQL CA certificate. |
-| `MIGRATION_DATABASE_URL` | `brewadmin` connection string for `brewdb`, including `sslmode=require`. |
+| `MIGRATION_DATABASE_URL` | PostgreSQL connection string used by CI migrations. It may be a plain container URL or a URL with `sslmode=require`. |
 | `DOTENV_PRIVATE_KEY_PRODUCTION` | Private dotenvx key for the encrypted `.env.production` file. |
 | `VPS_HOST` | Public hostname or IP address of the VPS. |
 | `VPS_SSH_KEY` | Private SSH key for the `deploy` user. |
 | `GHCR_PAT` | GitHub token with permission to pull the private container package on the VPS. |
 
-`MIGRATION_DATABASE_URL` should use the application database user, not the DigitalOcean admin user:
+`MIGRATION_DATABASE_URL` should use the application database user, not the database admin user:
 
 ```text
-postgresql://brewadmin:password@host:25060/brewdb?sslmode=require
+postgresql://brewadmin:password@db-host:5432/brewdb
 ```
 
-The workflow writes the DigitalOcean CA certificate to a temporary file and exposes it through `NODE_EXTRA_CA_CERTS` while migrations run. The migration script uses the workflow's direct `DATABASE_URL` and certificate inputs, so the migration job does not need to decrypt `.env.production` or receive `DOTENV_PRIVATE_KEY_PRODUCTION` at runtime.
+The migration job uses only this URL and does not decrypt `.env.production`. The database must be reachable from GitHub Actions; if the PostgreSQL container is private to the VPS Docker network, run migrations from the VPS instead or expose the database through a protected private/tunneled endpoint.
 
 ## Prepare dotenvx production configuration
 
@@ -43,10 +40,10 @@ pnpm exec dotenvx encrypt -f .env.production
 
 Commit the encrypted `.env.production` file and keep the generated private key out of Git. Add that private key as the `DOTENV_PRIVATE_KEY_PRODUCTION` GitHub Actions secret. The Docker build receives the key only as a BuildKit secret, and the running container receives it through the VPS `.env` file.
 
-Local development uses the same pattern with `.env.local`. To add the DigitalOcean certificate without putting raw multi-line PEM into dotenv syntax:
+Local development uses the same pattern with `.env.local`. `DATABASE_CA_CERT` is optional and is only needed when the database requires a specific CA:
 
 ```bash
-pnpm exec dotenvx set DATABASE_CA_CERT "$(cat .secrets/do-ca.crt)" -f .env.local
+pnpm exec dotenvx set DATABASE_CA_CERT "$(cat .secrets/db-ca.crt)" -f .env.local
 pnpm exec dotenvx encrypt -f .env.local
 ```
 
@@ -60,11 +57,13 @@ sudo chown -R deploy:deploy /var/www/brew-book
 sudo usermod -aG docker deploy
 ```
 
-Create `/var/www/brew-book/.env` on the VPS. This file is not committed or uploaded by GitHub Actions and should contain only the dotenvx private key:
+Create `/var/www/brew-book/.env` on the VPS. This file is not committed or uploaded by GitHub Actions and should contain the dotenvx private key:
 
 ```dotenv
 DOTENV_PRIVATE_KEY_PRODUCTION=your-dotenvx-private-key
 ```
+
+Set the production `DATABASE_URL` in `.env.production` to the PostgreSQL container's Docker-network address, for example `postgresql://brewadmin:password@postgres:5432/brewdb`. Omit `sslmode` for a private Docker network. If the database is exposed through TLS, use `?sslmode=require`; no CA variable is required unless you want strict CA verification.
 
 Log in once from the VPS if the GitHub package is private:
 

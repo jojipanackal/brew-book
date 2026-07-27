@@ -8,9 +8,9 @@ import { getPostgresConnectionConfig } from "../src/db/connection";
 // Ensure we are resolving paths relative to the project root
 const ROOT_DIR = process.cwd();
 
-// In CI, DATABASE_URL and NODE_EXTRA_CA_CERTS are injected directly by the
-// workflow. Do not load .env.production there because migrations do not need
-// the encrypted auth/Google values and dotenvx would require its private key.
+// In CI, DATABASE_URL is injected directly by the workflow. Do not load
+// .env.production there because migrations do not need the encrypted auth/
+// Google values and dotenvx would require its private key.
 if (!process.env.DATABASE_URL) {
     loadDotenvx();
 }
@@ -23,10 +23,6 @@ const db = drizzle(pool);
 async function runMigrations() {
     try {
         console.log("Connecting to the database to migrate...");
-        if (process.env.DATABASE_CA_CERT) {
-            console.log("DATABASE_CA_CERT is provided inline.");
-        }
-        
         // Point exactly to the drizzle folder at the root of your project
         await migrate(db, { migrationsFolder: path.join(ROOT_DIR, "drizzle") });
         

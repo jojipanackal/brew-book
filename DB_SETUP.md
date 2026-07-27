@@ -1,27 +1,27 @@
 # BrewBook Database Setup
 
-This guide connects BrewBook to DigitalOcean Managed PostgreSQL and enables Google Workspace login. The project uses TanStack Start for the server runtime, Better Auth for sessions, and Drizzle ORM for database access.
+This guide connects BrewBook to PostgreSQL and enables Google Workspace login. PostgreSQL may run in a VPS container or on a managed provider. The project uses TanStack Start for the server runtime, Better Auth for sessions, and Drizzle ORM for database access.
 
-## 1. Create a managed PostgreSQL database
+## 1. Create a PostgreSQL database
 
-Create the BrewBook database and application user in DigitalOcean Managed Databases. DigitalOcean commonly exposes PostgreSQL over port `25060`; use the exact host, port, database, user, and SSL settings shown in the DigitalOcean connection details.
+Create the BrewBook database and application user in your PostgreSQL container or managed provider. For a container on the same Docker network, use the PostgreSQL service name and port `5432`.
 
 Copy the provider's connection string. It should look similar to:
 
 ```text
-postgresql://user:password@host:5432/database?sslmode=require
+postgresql://user:password@postgres:5432/database
 ```
 
-Use the provider's pooled connection string if it recommends one for serverless or short-lived application instances. BrewBook reads this value from `DATABASE_URL`.
+Use `?sslmode=require` when the database endpoint requires TLS. BrewBook reads this value from `DATABASE_URL`; a plain URL without `sslmode` uses non-SSL PostgreSQL, which is suitable for a private Docker network. `DATABASE_CA_CERT` is optional.
 
-## 2. Grant the application user access in DigitalOcean
+## 2. Grant the application user access
 
-Use the DigitalOcean admin or main database user to connect to the BrewBook database. The application user needs permission to connect, create and update the schema during migrations, and read/write application data.
+Use the provider admin or main database user to connect to the BrewBook database. The application user needs permission to connect, create and update the schema during migrations, and read/write application data.
 
-You can run the following with `psql` from your machine. Replace the role and database names with the values you created in DigitalOcean:
+You can run the following with `psql` from your machine. Replace the role and database names with the values you created:
 
 ```bash
-psql "$DIGITALOCEAN_ADMIN_DATABASE_URL"
+psql "$POSTGRES_ADMIN_DATABASE_URL"
 ```
 
 Then run this SQL while connected to the BrewBook database:
@@ -44,7 +44,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE brewadmin IN SCHEMA public
 Run the migration as `brewadmin`, not as the main admin user. That makes the application role the owner of the BrewBook tables and PostgreSQL types it creates:
 
 ```bash
-DATABASE_URL='postgresql://brewadmin:password@host:25060/brewdb?sslmode=require' pnpm db:migrate
+DATABASE_URL='postgresql://brewadmin:password@postgres:5432/brewdb' pnpm db:migrate
 ```
 
 If an admin user already created the tables, run the `GRANT ... ON ALL TABLES` statements above again after the migration. For a clean new database, the normal order is: grant schema access, set `DATABASE_URL` to the `brewadmin` user, then run `pnpm db:migrate`.
@@ -70,8 +70,9 @@ cp .env.example .env.local
 Edit `.env.local`:
 
 ```dotenv
-DATABASE_URL=postgresql://brewadmin:password@host:25060/brewdb?sslmode=require
-DATABASE_CA_CERT=/absolute/path/to/do-ca.crt
+DATABASE_URL=postgresql://brewadmin:password@postgres:5432/brewdb
+# Optional: path or PEM contents when strict CA verification is required.
+DATABASE_CA_CERT=
 BETTER_AUTH_SECRET=replace-with-a-long-random-secret
 BETTER_AUTH_URL=http://localhost:3000
 BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:3000
@@ -110,10 +111,10 @@ https://your-domain.example/api/auth/callback/google
 
 `BETTER_AUTH_URL` must match the deployed origin in production.
 
-For local development, encrypt `.env.local` with dotenvx and store the DigitalOcean CA certificate in `DATABASE_CA_CERT` there. Do not paste an unquoted multi-line certificate into the file before encryption. Use dotenvx to write the certificate value safely:
+For local development, encrypt `.env.local` with dotenvx. If strict CA verification is required, store the provider certificate in `DATABASE_CA_CERT`. Do not paste an unquoted multi-line certificate into the file before encryption. Use dotenvx to write the certificate value safely:
 
 ```bash
-pnpm exec dotenvx set DATABASE_CA_CERT "$(cat .secrets/do-ca.crt)" -f .env.local
+pnpm exec dotenvx set DATABASE_CA_CERT "$(cat .secrets/db-ca.crt)" -f .env.local
 pnpm exec dotenvx encrypt -f .env.local
 ```
 

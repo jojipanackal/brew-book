@@ -67,37 +67,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install doctl
-        uses: digitalocean/action-doctl@v2
-        with:
-          token: ${{ secrets.DO_API_TOKEN }}
-
-      - name: Allow GitHub Actions IP in DigitalOcean
-        run: |
-          RUNNER_IP=$(curl -s https://api.ipify.org)
-          echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
-          doctl databases firewalls append "${{ secrets.DO_DATABASE_ID }}" --rule "ip_addr:$RUNNER_IP"
-          sleep 20
-
-      - name: Create DigitalOcean CA certificate file
-        run: |
-          mkdir -p certs
-          printf '%s\n' "${{ secrets.DO_DB_CERT }}" > certs/do-ca-certificate.crt
-
       - name: Run Drizzle migrations
         env:
           DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
-          NODE_EXTRA_CA_CERTS: certs/do-ca-certificate.crt
         run: pnpm db:migrate
-
-      - name: Revoke GitHub Actions IP from DigitalOcean
-        if: always()
-        run: |
-          RULES_JSON=$(doctl databases firewalls list "${{ secrets.DO_DATABASE_ID }}" -o json)
-          RULE_UUID=$(echo "$RULES_JSON" | jq -r ".[] | select(.value == \"$RUNNER_IP\") | .uuid")
-          if [ -n "$RULE_UUID" ] && [ "$RULE_UUID" != "null" ]; then
-            doctl databases firewalls remove "${{ secrets.DO_DATABASE_ID }}" --uuid "$RULE_UUID"
-          fi
 
   deploy:
     name: Deploy to VPS
