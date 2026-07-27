@@ -17,7 +17,9 @@ import {
 	User as UserIcon,
 	X as XIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+import { FlipFluid, FluidRenderer, setupFluidScene } from "#/lib/fluid";
 
 import { authClient } from "#/lib/auth-client";
 import {
@@ -812,6 +814,13 @@ function App() {
 		}));
 		setLeaveLoading(true);
 		void setLeaveStatus(next)
+			.then(() => getDrinkDay(todayKey))
+			.then((day) => {
+				setState((current) => ({
+					...current,
+					entries: { ...current.entries, [todayKey]: day.responses },
+				}));
+			})
 			.catch(() => {
 				setState((current) => ({
 					...current,
@@ -868,11 +877,12 @@ function App() {
 		<ErrorBoundary fallback={AppErrorFallback}>
 			<main
 				className={cx(
-					"min-h-svh bg-[var(--c-page)] pt-[57px] text-[var(--c-text)] lg:pb-0",
+					"min-h-svh bg-[var(--c-page)] text-[var(--c-text)] lg:pb-0",
 					!isGuest && "pb-20",
 				)}
+				style={{ paddingTop: "calc(57px + env(safe-area-inset-top))" }}
 			>
-				<header className="fixed inset-x-0 top-0 z-10 border-b border-[var(--c-border)] bg-[var(--c-card)]/95 backdrop-blur">
+				<header className="fixed inset-x-0 top-0 z-10 border-b border-[var(--c-border)] bg-[var(--c-card)]/95 backdrop-blur" style={{ paddingTop: "env(safe-area-inset-top)" }}>
 					<div className="mx-auto flex max-w-[1180px] items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
 					<button type="button" onClick={tapLogo} className="flex items-center gap-2.5" aria-label="MyBev logo">
 						<BrandMark />
@@ -1869,6 +1879,49 @@ function TodayView({
 	onToggleLeave?: () => void;
 	leaveLoading?: boolean;
 }) {
+	// IST time for cutoff checks
+	const [nowIST, setNowIST] = useState(() => {
+		const d = new Date();
+		const [h, m] = new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" }).format(d).split(":").map(Number);
+		return h * 60 + m;
+	});
+	useEffect(() => {
+		const id = setInterval(() => {
+			const d = new Date();
+			const [h, m] = new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" }).format(d).split(":").map(Number);
+			setNowIST(h * 60 + m);
+		}, 30_000);
+		return () => clearInterval(id);
+	}, []);
+
+	const morningClosed = nowIST >= 11 * 60 && nowIST < 12 * 60;   // 11:00–11:59 AM IST
+	const eveningClosed = nowIST >= 15 * 60 + 15 && nowIST < 16 * 60; // 3:15–3:59 PM IST
+
+	const morningClosedMessages = [
+		"No coffee for you! The morning window closed at 11 AM.",
+		"The kettle has gone cold. Morning poll is done.",
+		"You snooze, you lose the morning brew.",
+		"Morning window closed. The beans have moved on.",
+		"Too late for morning, too early for regrets.",
+	];
+	const eveningClosedMessages = [
+		"The evening round is a wrap. Go drink some water.",
+		"Poll closed at 3:15. Your tea waited... it left.",
+		"Evening window shut. Even the chai went home.",
+		"You missed the evening round. Decaf is your punishment.",
+		"Poll o'clock was 3:15. It is now too late o'clock.",
+	];
+
+	function pickRoundRobin(arr: string[], seed: string) {
+		const idx = seed.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % arr.length;
+		return arr[idx];
+	}
+
+	const morningMsg = pickRoundRobin(morningClosedMessages, todayKey + "m");
+	const eveningMsg = pickRoundRobin(eveningClosedMessages, todayKey + "e");
+
+	const isPeriodClosed = (id: Period) => (id === "morning" ? morningClosed : eveningClosed);
+
 	return (
 		<div className="grid gap-5">
 			<PageHeader
@@ -1910,17 +1963,28 @@ function TodayView({
 			)}
 			<div className={cx("grid gap-3", isOnLeave && "pointer-events-none opacity-40")}>
 				{periodDetails.map((period) => (
-					<DrinkPoll
-						key={period.id}
-						period={period}
-						polls={todayPolls}
-						selected={entry[period.id]}
-						sugar={sugar[period.id]}
-						editable
-						onSelect={(drink) => updateEntry(period.id, drink)}
-						onToggleSugar={(next) => updateSugar(period.id, next)}
-						onOpen={guest ? undefined : () => onOpen(period.id)}
-					/>
+					<div key={period.id} className="grid gap-0">
+						<DrinkPoll
+							period={period}
+							polls={todayPolls}
+							selected={entry[period.id]}
+							sugar={sugar[period.id]}
+							editable={!isPeriodClosed(period.id)}
+							onSelect={isPeriodClosed(period.id) ? undefined : (drink) => updateEntry(period.id, drink)}
+							onToggleSugar={isPeriodClosed(period.id) ? undefined : (next) => updateSugar(period.id, next)}
+							onOpen={guest || isPeriodClosed(period.id) ? undefined : () => onOpen(period.id)}
+						/>
+						{isPeriodClosed(period.id) && (
+							<div className="rounded-b-2xl border border-t-0 border-[var(--c-border)] bg-[var(--c-muted)] px-4 py-3 text-center">
+								<p className="text-sm font-semibold text-[var(--c-text-mid)]">
+									{period.id === "morning" ? morningMsg : eveningMsg}
+								</p>
+								<p className="mt-1 text-xs text-[var(--c-text-muted)]">
+									Need to fix your response? Contact your admin.
+								</p>
+							</div>
+						)}
+					</div>
 				))}
 			</div>
 		</div>
@@ -2036,8 +2100,11 @@ function StatsView() {
 	}, [range]);
 
 	if (fetching && !stats) return (
-		<div className="flex items-center justify-center py-20">
-			<Loader2 size={28} className="animate-spin text-[var(--c-brand-lt)]" />
+		<div className="grid min-h-[50svh] place-items-center">
+			<div className="flex flex-col items-center gap-3">
+				<output aria-label="Loading" className="size-10 animate-spin rounded-full border-2 border-[var(--c-border)] border-t-[var(--c-brand)]" />
+				<p className="text-sm text-[var(--c-text-muted)]">{pickRandom(brewingMessages)}</p>
+			</div>
 		</div>
 	);
 	if (!stats) return null;
@@ -2530,48 +2597,77 @@ function DrinkPoll({
 	);
 }
 
+// Parse a CSS hex color to normalized RGB
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+	const n = parseInt(hex.replace("#", ""), 16);
+	return { r: ((n >> 16) & 255) / 255, g: ((n >> 8) & 255) / 255, b: (n & 255) / 255 };
+}
+
 function GlassEasterEgg({ onClose }: { onClose: () => void }) {
 	const [activeDrink, setActiveDrink] = useState<Drink>("Coffee");
 	const { tilt, permission, requestPermission } = useGyroscope();
-	const color = drinkColors[activeDrink] ?? "#a36f43";
 
-	// Fill level: starts full, decreases as user tilts forward to "drink"
-	// beta ~90 = upright; tipping toward face decreases beta; < 45 = drinking gesture
-	const [fill, setFill] = useState(0.75);
-	const drinkingRef = useState<ReturnType<typeof setInterval> | null>(null);
+	const canvasRef = useRef<HTMLCanvasElement>(null);
+	const fluidRef = useRef<FlipFluid | null>(null);
+	const rendererRef = useRef<FluidRenderer | null>(null);
+	const rafRef = useRef<number>(0);
+	const simWidthRef = useRef(3.0);
+	const simHeightRef = useRef(4.0);
 
+	// Init / teardown fluid sim
 	useEffect(() => {
-		const isDrinking = tilt.beta < 45 && activeDrink !== "No drink" && fill > 0;
-		if (isDrinking) {
-			const id = setInterval(() => {
-				setFill((f) => Math.max(0, f - 0.008));
-			}, 50);
-			drinkingRef[1](id);
-			return () => clearInterval(id);
-		}
-		if (drinkingRef[0]) {
-			clearInterval(drinkingRef[0]);
-			drinkingRef[1](null);
-		}
-	}, [tilt.beta, activeDrink]);
+		const canvas = canvasRef.current;
+		if (!canvas || permission !== "granted") return;
 
-	// Reset fill when drink changes
+		const dpr = window.devicePixelRatio || 1;
+		const rect = canvas.getBoundingClientRect();
+		canvas.width = rect.width * dpr;
+		canvas.height = rect.height * dpr;
+		const aspect = canvas.height / canvas.width;
+		simWidthRef.current = 3.0;
+		simHeightRef.current = 3.0 * aspect;
+
+		const color = hexToRgb(drinkColors[activeDrink] ?? "#a36f43");
+		const foam = { r: Math.min(1, color.r + 0.35), g: Math.min(1, color.g + 0.25), b: Math.min(1, color.b + 0.2) };
+
+		fluidRef.current = setupFluidScene(simWidthRef.current, simHeightRef.current, 60, 0.6, 0.75, color, foam, 0.0008, 0.4);
+		rendererRef.current = new FluidRenderer(canvas);
+
+		const dt = 1.0 / 120.0;
+
+		function loop() {
+			const f = fluidRef.current;
+			const r = rendererRef.current;
+			if (!f || !r) return;
+
+			// gamma = left/right tilt (-45..45), map to X gravity
+			// beta = forward tilt; upright ~90, tilted forward ~0-45
+			// Y gravity: invert (sim Y is up), so gravity pulls down = negative Y
+			const gx = (tilt.gamma / 45) * 9.81;
+			const gy = -9.81;
+
+			f.simulate(dt, gx, gy, 0.95, 50, 2, 1.7, true, true, 1.0);
+			r.render(f, { simWidth: simWidthRef.current, simHeight: simHeightRef.current });
+			rafRef.current = requestAnimationFrame(loop);
+		}
+		rafRef.current = requestAnimationFrame(loop);
+
+		return () => {
+			cancelAnimationFrame(rafRef.current);
+			fluidRef.current = null;
+			rendererRef.current = null;
+		};
+	}, [permission]);
+
+	// Update fluid color when drink changes
 	useEffect(() => {
-		setFill(activeDrink === "No drink" ? 0.04 : 0.75);
+		const f = fluidRef.current;
+		if (!f) return;
+		const color = hexToRgb(drinkColors[activeDrink] ?? "#a36f43");
+		const foam = { r: Math.min(1, color.r + 0.35), g: Math.min(1, color.g + 0.25), b: Math.min(1, color.b + 0.2) };
+		f.setFluidColor(color);
+		f.setFoamColor(foam);
 	}, [activeDrink]);
-
-	const fillLevel = activeDrink === "No drink" ? 0.04 : fill;
-	const liquidShift = tilt.gamma * 0.8;
-	const isDrinking = tilt.beta < 45 && fillLevel > 0;
-
-	const bubbles = [
-		{ x: 28, delay: "0s", size: 3 },
-		{ x: 52, delay: "0.5s", size: 2.5 },
-		{ x: 72, delay: "0.9s", size: 4 },
-		{ x: 40, delay: "1.4s", size: 2 },
-		{ x: 64, delay: "0.2s", size: 3 },
-		{ x: 82, delay: "1.1s", size: 2 },
-	];
 
 	// Permission-first screen
 	if (permission !== "granted") {
@@ -2613,64 +2709,12 @@ function GlassEasterEgg({ onClose }: { onClose: () => void }) {
 				</button>
 			</div>
 
-			{/* Glass */}
-			<div className="flex flex-1 flex-col items-center justify-center gap-3">
-				<div
-					style={{
-						transform: `rotate(${tilt.gamma * 0.4 + (isDrinking ? 40 : 0)}deg) translateY(${isDrinking ? -15 : 0}px)`,
-						transition: "transform 0.06s linear",
-					}}
-				>
-					<svg width="160" height="240" viewBox="0 0 160 240" fill="none" xmlns="http://www.w3.org/2000/svg">
-						<defs>
-							<clipPath id="egg-glass-clip">
-								<path d="M28 12 L132 12 L118 222 L42 222 Z" />
-							</clipPath>
-						</defs>
-						<g clipPath="url(#egg-glass-clip)">
-							<rect x="-20" y={12 + (1 - fillLevel) * 210} width="200" height="230" fill={color} opacity="0.88" />
-							{fillLevel > 0.05 && (
-								<polygon
-									points={`
-										${-20 + liquidShift - 20},${12 + (1 - fillLevel) * 210 + liquidShift * 0.3}
-										${180 + liquidShift + 20},${12 + (1 - fillLevel) * 210 - liquidShift * 0.3}
-										${180 + liquidShift + 20},${12 + (1 - fillLevel) * 210 - liquidShift * 0.3 - 12}
-										${-20 + liquidShift - 20},${12 + (1 - fillLevel) * 210 + liquidShift * 0.3 - 12}
-									`}
-									fill={color} opacity="0.45"
-								/>
-							)}
-							{fillLevel > 0.05 && bubbles.map((b, i) => (
-								<circle
-									key={i}
-									cx={b.x + liquidShift * 0.25}
-									cy="160"
-									r={b.size}
-									fill="white" opacity="0.3"
-									style={{ animation: `bubble-rise 2.2s ${b.delay} infinite ease-in` }}
-								/>
-							))}
-						</g>
-						<path d="M28 12 L132 12 L118 222 L42 222 Z" stroke="var(--c-border-3)" strokeWidth="3.5" fill="none" strokeLinejoin="round" />
-						<path d="M42 24 L47 188" stroke="white" strokeWidth="5" strokeLinecap="round" opacity="0.2" />
-						<path d="M56 16 L60 60" stroke="white" strokeWidth="3" strokeLinecap="round" opacity="0.18" />
-						<path d="M28 12 L132 12" stroke="white" strokeWidth="3.5" strokeLinecap="round" opacity="0.28" />
-					</svg>
-				</div>
-
-				<p className="font-serif text-xl font-bold text-[var(--c-brand)]">{activeDrink}</p>
-				<p className="text-xs text-[var(--c-text-dim)]">
-					{fill <= 0 ? "All gone!" : isDrinking ? "Sipping..." : "Tilt left/right to swirl. Tilt toward you to sip."}
+			{/* Fluid canvas */}
+			<div className="relative flex-1 overflow-hidden">
+				<canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
+				<p className="absolute bottom-4 left-0 right-0 text-center text-xs text-[var(--c-text-dim)]">
+					Tilt to move the fluid
 				</p>
-				{fill <= 0 && (
-					<button
-						type="button"
-						onClick={() => setFill(0.75)}
-						className="rounded-full border border-[var(--c-border)] px-4 py-2 text-xs font-semibold text-[var(--c-text-mid)] transition hover:bg-[var(--c-muted)]"
-					>
-						Refill
-					</button>
-				)}
 			</div>
 
 			{/* Drink picker */}
