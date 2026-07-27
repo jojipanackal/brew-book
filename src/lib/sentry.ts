@@ -30,7 +30,9 @@ export const captureSentryException = createIsomorphicFn().client(
 );
 
 export const syncSentryUser = createIsomorphicFn().client(
-	(user: { id?: string; name: string; email: string; role?: string } | null) => {
+	(
+		user: { id?: string; name: string; email: string; role?: string } | null,
+	) => {
 		if (!initialized) return;
 
 		if (!user) {
