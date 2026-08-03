@@ -15,6 +15,7 @@ export const drinkChoice = pgEnum('drink_choice', ['Tea', 'Coffee', 'Green tea',
 export const drinkSource = pgEnum('drink_source', ['default', 'manual', 'admin'])
 export const userRole = pgEnum('user_role', ['user', 'admin', 'guest'])
 export const guestStatus = pgEnum('guest_status', ['pending', 'approved', 'rejected'])
+export const attendanceStatus = pgEnum('attendance_status', ['office', 'wfh', 'leave'])
 
 export const company = pgTable('company', {
   id: text('id').primaryKey(),
@@ -123,4 +124,18 @@ export const drinkResponse = pgTable(
     index('drink_response_date_idx').on(table.date),
     index('drink_response_user_date_idx').on(table.userId, table.date),
   ],
+)
+
+export const attendance = pgTable(
+  'attendance',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+    date: date('date').notNull(),
+    period: drinkPeriod('period').notNull(),
+    status: attendanceStatus('status').notNull().default('office'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique().on(table.userId, table.date, table.period), index('attendance_date_idx').on(table.date)],
 )

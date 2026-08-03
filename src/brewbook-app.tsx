@@ -24,6 +24,7 @@ import { FlipFluid, FluidRenderer, setupFluidScene } from "#/lib/fluid";
 import { authClient } from "#/lib/auth-client";
 import {
 	type AdminDashboard,
+	type AttendanceStatus,
 	type Company,
 	type CompanyRecord,
 	completeOnboarding,
@@ -38,7 +39,7 @@ import {
 	getGuestSession,
 	getProfile,
 	getStats,
-	setLeaveStatus,
+	setAvailability,
 	leaveGuest,
 	type Period,
 	type PollRecord,
@@ -276,6 +277,9 @@ function sourceLabel(source: PollSource) {
 		: source === "manual"
 			? "Manual"
 			: "Default";
+}
+function availabilityLabel(status: AttendanceStatus) {
+	return status === "wfh" ? "WFH" : status === "leave" ? "Leave" : "In office";
 }
 function MetaTag({ children, muted = false }: { children: React.ReactNode; muted?: boolean }) {
 	return (
@@ -550,7 +554,7 @@ function App() {
 					if (cancelled) return;
 					setState((current) => ({
 						...current,
-						user: { ...user, role: profile.role, isOnLeave: profile.isOnLeave },
+						user: { ...user, role: profile.role, isOnLeave: profile.isOnLeave, availability: profile.availability },
 						defaults: profile.defaults,
 						sugarDefaults: profile.sugarDefaults,
 					}));
@@ -569,7 +573,7 @@ function App() {
 						if (cancelled) return;
 						setState((current) => ({
 							...current,
-							user: { ...user, role: profile.role, isOnLeave: profile.isOnLeave },
+							user: { ...user, role: profile.role, isOnLeave: profile.isOnLeave, availability: day.responses.find((entry) => entry.user.email === user.email)?.availability ?? profile.availability },
 							defaults: day.defaults,
 							sugarDefaults: day.sugarDefaults,
 							entries: { ...current.entries, [todayKey]: day.responses },
@@ -883,30 +887,17 @@ function App() {
 			);
 	}
 
-	const [leaveLoading, setLeaveLoading] = useState(false);
-	function toggleLeave() {
-		if (!state.user || leaveLoading) return;
-		const next = !state.user.isOnLeave;
-		setState((current) => ({
-			...current,
-			user: current.user ? { ...current.user, isOnLeave: next } : null,
-		}));
-		setLeaveLoading(true);
-		void setLeaveStatus(next)
+	const [availabilityLoading, setAvailabilityLoading] = useState<Period | null>(null);
+	function updateAvailability(period: Period, status: AttendanceStatus) {
+		if (!state.user || availabilityLoading) return;
+		const nextAvailability = { morning: state.user.availability?.morning ?? 'office', evening: state.user.availability?.evening ?? 'office', [period]: status };
+		setState((current) => ({ ...current, user: current.user ? { ...current.user, availability: nextAvailability } : null }));
+		setAvailabilityLoading(period);
+		void setAvailability({ date: todayKey, period, status })
 			.then(() => getDrinkDay(todayKey))
-			.then((day) => {
-				setState((current) => ({
-					...current,
-					entries: { ...current.entries, [todayKey]: day.responses },
-				}));
-			})
-			.catch(() => {
-				setState((current) => ({
-					...current,
-					user: current.user ? { ...current.user, isOnLeave: !next } : null,
-				}));
-			})
-			.finally(() => setLeaveLoading(false));
+			.then((day) => setState((current) => ({ ...current, user: current.user ? { ...current.user, availability: day.responses.find((entry) => entry.user.email === current.user?.email)?.availability ?? nextAvailability } : null, entries: { ...current.entries, [todayKey]: day.responses } })))
+			.catch((reason: unknown) => setError(reportSentryError(reason, "Unable to save availability")))
+			.finally(() => setAvailabilityLoading(null));
 	}
 
 	if (authPending || guestPending) return <AuthLoading message={pickRandom(brewingMessages)} />;
@@ -1018,9 +1009,9 @@ function App() {
 								updateEntry={updateEntry}
 								updateSugar={updateSugar}
 								onOpen={(period) => setOpenPoll({ date: todayKey, period })}
-								isOnLeave={state.user.isOnLeave ?? false}
-								onToggleLeave={toggleLeave}
-								leaveLoading={leaveLoading}
+								availability={state.user.availability}
+								onUpdateAvailability={updateAvailability}
+								availabilityLoading={availabilityLoading}
 								pianoMode={pianoMode}
 							/>
 						)}
@@ -1981,9 +1972,9 @@ function TodayView({
 	updateSugar,
 	onOpen,
 	guest = false,
-	isOnLeave = false,
-	onToggleLeave,
-	leaveLoading = false,
+	availability = { morning: "office", evening: "office" },
+	onUpdateAvailability,
+	availabilityLoading = null,
 	pianoMode = false,
 }: {
 	entry: DrinkChoice;
@@ -1993,9 +1984,9 @@ function TodayView({
 	updateSugar: (period: Period, sugar: boolean) => void;
 	onOpen: (period: Period) => void;
 	guest?: boolean;
-	isOnLeave?: boolean;
-	onToggleLeave?: () => void;
-	leaveLoading?: boolean;
+	availability?: Record<Period, AttendanceStatus>;
+	onUpdateAvailability?: (period: Period, status: AttendanceStatus) => void;
+	availabilityLoading?: Period | null;
 	pianoMode?: boolean;
 }) {
 	// IST time for cutoff checks
@@ -2013,8 +2004,8 @@ function TodayView({
 		return () => clearInterval(id);
 	}, []);
 
-	const morningClosed = nowIST >= 11 * 60 && nowIST < 12 * 60;   // 11:00–11:59 AM IST
-	const eveningClosed = nowIST >= 15 * 60 + 15 && nowIST < 16 * 60; // 3:15–3:59 PM IST
+	const morningClosed = nowIST >= 11 * 60;
+	const eveningClosed = nowIST >= 15 * 60 + 15;
 
 	const morningClosedMessages = [
 		"No coffee for you! The morning window closed at 11 AM.",
@@ -2073,39 +2064,8 @@ function TodayView({
 				title={pianoMode ? "🎹 Piano Mode" : "Today"}
 				action={pianoMode ? "tap to play" : `${todayPolls.length} people`}
 			/>
-			{!guest && (
-				<button
-					type="button"
-					onClick={onToggleLeave}
-					disabled={leaveLoading}
-					className={cx(
-						"flex items-center justify-between rounded-2xl border px-4 py-3 transition",
-						isOnLeave
-							? "border-[var(--c-brand-pale)] bg-[var(--c-accent-bg)]"
-							: "border-[var(--c-border)] bg-[var(--c-card)]",
-					)}
-				>
-					<span className={cx("text-sm font-semibold", isOnLeave ? "text-[var(--c-brand)]" : "text-[var(--c-text-mid)]")}>
-						{isOnLeave ? "On leave today" : "Mark as on leave"}
-					</span>
-					{leaveLoading ? (
-						<Loader2 size={18} className="animate-spin text-[var(--c-brand-lt)]" />
-					) : (
-						<span
-							className="relative h-6 w-11 rounded-full transition-colors duration-200"
-							style={{ background: isOnLeave ? "var(--c-brand)" : "var(--c-toggle-off)" }}
-						>
-							<span
-								className={cx(
-									"absolute top-1 size-4 rounded-full bg-[var(--c-cream)] shadow transition-all duration-200",
-									isOnLeave ? "left-6" : "left-1",
-								)}
-							/>
-						</span>
-					)}
-				</button>
-			)}
-			<div className={cx("grid gap-3", isOnLeave && "pointer-events-none opacity-40")}>
+			{!guest && <AvailabilityControl availability={availability} loading={availabilityLoading} onChange={onUpdateAvailability} />}
+			<div className="grid gap-3">
 				{periodDetails.map((period) => (
 					<div key={period.id} className="grid gap-0">
 						<DrinkPoll
@@ -2113,7 +2073,7 @@ function TodayView({
 							polls={todayPolls}
 							selected={entry[period.id]}
 							sugar={sugar[period.id]}
-							editable={!isPeriodClosed(period.id)}
+							editable={!isPeriodClosed(period.id) && availability[period.id] === "office"}
 							onSelect={isPeriodClosed(period.id) ? undefined : (drink) => (pianoMode ? pianoSelect(period.id, drink) : updateEntry(period.id, drink))}
 							onToggleSugar={isPeriodClosed(period.id) ? undefined : (next) => updateSugar(period.id, next)}
 							onOpen={guest || isPeriodClosed(period.id) ? undefined : () => onOpen(period.id)}
@@ -2132,6 +2092,33 @@ function TodayView({
 				))}
 			</div>
 		</div>
+	);
+}
+function AvailabilityControl({ availability, loading, onChange }: { availability: Record<Period, AttendanceStatus>; loading: Period | null; onChange?: (period: Period, status: AttendanceStatus) => void }) {
+	const labels: Record<AttendanceStatus, string> = { office: "In office", wfh: "Working from home", leave: "On leave" };
+	const active = periods.filter((period) => availability[period] !== "office");
+	return (
+		<details className="rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] px-4 py-3">
+			<summary className="cursor-pointer list-none text-sm font-semibold text-[var(--c-text-mid)]">
+				Set today’s availability{active.length ? ` · ${active.map((period) => labels[availability[period]]).join(", ")}` : ""}
+			</summary>
+			<div className="mt-3 grid gap-3 border-t border-[var(--c-border-2)] pt-3 sm:grid-cols-2">
+				{periods.map((period) => (
+					<label key={period} className="grid gap-1.5 text-xs font-semibold text-[var(--c-text-muted)]">
+						<span>{period === "morning" ? "Morning" : "Evening"}</span>
+						<select
+							className="h-10 rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-2 text-sm font-semibold text-[var(--c-text-mid)]"
+							disabled={loading !== null}
+							value={availability[period]}
+							onChange={(event) => onChange?.(period, event.target.value as AttendanceStatus)}
+						>
+							{(Object.keys(labels) as AttendanceStatus[]).map((status) => <option key={status} value={status}>{labels[status]}</option>)}
+						</select>
+						{loading === period && <Loader2 size={14} className="animate-spin text-[var(--c-brand-lt)]" />}
+					</label>
+				))}
+			</div>
+		</details>
 	);
 }
 function MiniCalendar({ selected, onSelect }: { selected: string; onSelect: (d: string) => void }) {
@@ -2648,8 +2635,10 @@ function DrinkPoll({
 	onToggleSugar?: (sugar: boolean) => void;
 	onOpen?: () => void;
 }) {
-	const counts = countChoices(polls.map((entry) => entry.choices))[period.id];
-	const total = polls.length;
+	const activePolls = polls.filter((entry) => entry.availability[period.id] === "office");
+	const counts = countChoices(activePolls.map((entry) => entry.choices))[period.id];
+	const unavailableCount = polls.length - activePolls.length;
+	const total = activePolls.length;
 	const [infoDrink, setInfoDrink] = useState<Drink | null>(null);
 	return (
 		<div className="overflow-hidden rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] shadow-[0_8px_30px_rgba(77,57,38,0.04)]">
@@ -2663,7 +2652,7 @@ function DrinkPoll({
 							{period.label}
 						</span>
 						<span className="block text-xs text-[var(--c-text-dim)]">
-							{total} {total === 1 ? "response" : "responses"}
+							{total} {total === 1 ? "response" : "responses"}{unavailableCount ? ` · ${unavailableCount} away` : ""}
 						</span>
 					</span>
 				</span>
@@ -3042,6 +3031,7 @@ function PollDetailsSheet({
 		sourceFilter === "all"
 			? polls
 			: polls.filter((item) => item.sources[period] === sourceFilter);
+	const awayPolls = filteredPolls.filter((item) => item.availability[period] !== "office");
 
 	function handleTouchStart(e: React.TouchEvent) {
 		dragStart[1](e.touches[0].clientY);
@@ -3108,9 +3098,17 @@ function PollDetailsSheet({
 					</div>
 				</div>
 				<div className="no-scrollbar mt-4 min-h-0 flex-1 grid content-start gap-4 overflow-y-auto overscroll-contain [touch-action:pan-y]">
+					{awayPolls.length > 0 && (
+						<section>
+							<h3 className="mb-2 text-base font-semibold text-[var(--c-text-muted)]">Not ordering this round</h3>
+							<div className="grid gap-2">
+								{awayPolls.map((item) => <div className="flex items-center justify-between rounded-xl bg-[var(--c-row)] px-3 py-2.5" key={item.user.email}><span className="text-sm font-semibold">{compactName(item.user)}</span><MetaTag muted>{availabilityLabel(item.availability[period])}</MetaTag></div>)}
+							</div>
+						</section>
+					)}
 					{drinks.map((drink) => {
 						const drinkPolls = filteredPolls.filter(
-							(item) => item.choices[period] === drink,
+							(item) => item.availability[period] === "office" && item.choices[period] === drink,
 						);
 						const sugarFreeCount = drinkPolls.filter(
 							(item) => !item.sugar[period],

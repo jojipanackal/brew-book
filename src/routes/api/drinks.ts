@@ -1,10 +1,10 @@
-import { and, eq, gt, inArray, ne } from 'drizzle-orm'
+import { and, eq, gt, inArray } from 'drizzle-orm'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { db } from '#/db'
-import { drinkDefault, drinkResponse, user } from '#/db/schema'
+import { attendance, drinkDefault, drinkResponse, user } from '#/db/schema'
 import { auth } from '#/lib/auth'
-import { drinks, periods, type Drink, type DrinkChoice, type Period, type PollSource, type SugarChoice } from '#/lib/drinks'
+import { drinks, periods, type AttendanceStatus, type Drink, type DrinkChoice, type Period, type PollSource, type SugarChoice } from '#/lib/drinks'
 
 const indiaDateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' })
 const todayKey = () => indiaDateFormatter.format(new Date())
@@ -60,32 +60,46 @@ export async function readDay(userId: string | undefined, date: string) {
       drink: drinkResponse.drink,
       sugar: drinkResponse.sugar,
       source: drinkResponse.source,
-    }).from(drinkResponse).innerJoin(user, eq(user.id, drinkResponse.userId)).where(
-      companyId ? and(eq(drinkResponse.date, date), eq(user.companyId, companyId), ne(user.isOnLeave, true)) : and(eq(drinkResponse.date, date), ne(user.isOnLeave, true)),
-    )
+    }).from(drinkResponse).innerJoin(user, eq(user.id, drinkResponse.userId)).where(companyId ? and(eq(drinkResponse.date, date), eq(user.companyId, companyId)) : eq(drinkResponse.date, date))
+  const availabilityRows = await db.select({ userId: attendance.userId, period: attendance.period, status: attendance.status })
+    .from(attendance).where(eq(attendance.date, date))
+  const members = await db.select({ id: user.id, name: user.name, email: user.email, image: user.image })
+    .from(user).where(companyId ? eq(user.companyId, companyId) : undefined)
 
-  const grouped = new Map<string, { user: { id: string; name: string; email: string; image: string | null }; choices: Partial<DrinkChoice>; sugar: Partial<SugarChoice>; sources: Partial<Record<Period, PollSource>> }>()
+  const grouped = new Map<string, { user: { id: string; name: string; email: string; image: string | null }; choices: Partial<DrinkChoice>; sugar: Partial<SugarChoice>; sources: Partial<Record<Period, PollSource>>; availability: Partial<Record<Period, AttendanceStatus>> }>()
+  for (const member of members) grouped.set(member.id, { user: member, choices: {}, sugar: {}, sources: {}, availability: {} })
   for (const row of responseRows) {
-    const existing = grouped.get(row.userId) ?? { user: { id: row.userId, name: row.name, email: row.email, image: row.image }, choices: {}, sugar: {}, sources: {} }
+    const existing = grouped.get(row.userId) ?? { user: { id: row.userId, name: row.name, email: row.email, image: row.image }, choices: {}, sugar: {}, sources: {}, availability: {} }
     existing.choices[row.period] = row.drink
     existing.sugar[row.period] = row.sugar
     existing.sources[row.period] = row.source
     grouped.set(row.userId, existing)
   }
+  for (const row of availabilityRows) {
+    const existing = grouped.get(row.userId)
+    if (existing) existing.availability[row.period] = row.status
+  }
 
   const defaultSettings = defaultsFromRows(defaultRows)
-  return { ...defaultSettings, responses: [...grouped.values()].map((entry) => ({
+  return { ...defaultSettings, availability: { morning: 'office' as const, evening: 'office' as const }, responses: [...grouped.values()].filter((entry) => entry.user.email && !entry.user.email.endsWith('@guest.brewbook.local') || responseRows.some((row) => row.userId === entry.user.id)).map((entry) => {
+    const availability = { morning: entry.availability.morning ?? 'office', evening: entry.availability.evening ?? 'office' }
+    const inactive = (period: Period) => availability[period] !== 'office'
+    return {
     user: entry.user,
-    choices: { morning: entry.choices.morning ?? 'No drink', evening: entry.choices.evening ?? 'No drink' },
+    choices: { morning: inactive('morning') ? 'No drink' : (entry.choices.morning ?? 'No drink'), evening: inactive('evening') ? 'No drink' : (entry.choices.evening ?? 'No drink') },
     sugar: { morning: entry.sugar.morning ?? true, evening: entry.sugar.evening ?? true },
     sources: { morning: entry.sources.morning ?? 'default', evening: entry.sources.evening ?? 'default' },
-  })) }
+    availability,
+  }
+  }) }
 }
 
 export async function ensureTodayResponses(companyId: string, date: string) {
   if (date !== todayKey()) return
 
   const members = await db.select({ id: user.id, isGuest: user.isGuest, isOnLeave: user.isOnLeave }).from(user).where(eq(user.companyId, companyId))
+  const attendanceRows = await db.select({ userId: attendance.userId, period: attendance.period, status: attendance.status }).from(attendance).where(and(eq(attendance.date, date), inArray(attendance.userId, members.map((member) => member.id))))
+  const unavailable = new Set(attendanceRows.filter((row) => row.status !== 'office').map((row) => `${row.userId}:${row.period}`))
   const eligibleMembers = members.filter((member) => !member.isOnLeave && !member.isGuest)
   if (!eligibleMembers.length) return
 
@@ -98,7 +112,7 @@ export async function ensureTodayResponses(companyId: string, date: string) {
     defaultsByUser.set(row.userId, defaults)
   }
 
-  await db.insert(drinkResponse).values(eligibleMembers.flatMap((member) => periods.map((period) => {
+  await db.insert(drinkResponse).values(eligibleMembers.flatMap((member) => periods.filter((period) => !unavailable.has(`${member.id}:${period}`)).map((period) => {
     const preference = defaultsByUser.get(member.id)?.[period]
     return {
       id: crypto.randomUUID(),

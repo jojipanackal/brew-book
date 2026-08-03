@@ -6,20 +6,23 @@ export type Period = (typeof periods)[number]
 export type Company = string
 export type CompanyRecord = { id: string; name: string; emailEnding1: string; emailEnding2: string | null }
 export type PollSource = 'default' | 'manual' | 'admin'
+export type AttendanceStatus = 'office' | 'wfh' | 'leave'
 export type DrinkChoice = Record<Period, Drink>
 export type SugarChoice = Record<Period, boolean>
-export type User = { id?: string; name: string; email: string; image?: string | null; role?: 'user' | 'admin' | 'guest'; isOnLeave?: boolean }
+export type User = { id?: string; name: string; email: string; image?: string | null; role?: 'user' | 'admin' | 'guest'; isOnLeave?: boolean; availability?: Record<Period, AttendanceStatus> }
 export type PollRecord = {
   user: User
   choices: DrinkChoice
   sugar: SugarChoice
   sources: Record<Period, PollSource>
+  availability: Record<Period, AttendanceStatus>
 }
 export type DrinkDay = {
   date: string
   defaults: DrinkChoice
   sugarDefaults: SugarChoice
   responses: PollRecord[]
+  availability: Record<Period, AttendanceStatus>
 }
 export type Profile = {
   company: Company | null
@@ -30,12 +33,13 @@ export type Profile = {
   role: 'user' | 'admin' | 'guest'
   accessDenied: boolean
   isOnLeave: boolean
+  availability: Record<Period, AttendanceStatus>
 }
 
-export function setLeaveStatus(isOnLeave: boolean) {
-  return request<{ isOnLeave: boolean }>('/api/profile', {
+export function setAvailability(input: { date: string; period: Period; status: AttendanceStatus }) {
+  return request<{ date: string; period: Period; status: AttendanceStatus }>('/api/profile', {
     method: 'PATCH',
-    body: JSON.stringify({ isOnLeave }),
+    body: JSON.stringify(input),
   })
 }
 export type GuestSession = { user: User; date: string; status: 'pending' | 'approved' | 'rejected'; defaults: DrinkChoice; sugarDefaults: SugarChoice; responses: PollRecord[] }
