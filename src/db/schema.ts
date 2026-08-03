@@ -41,6 +41,7 @@ export const user = pgTable('user', {
   guestReviewedAt: timestamp('guest_reviewed_at', { withTimezone: true }),
   emailVerified: boolean('email_verified').notNull().default(false),
   image: text('image'),
+  pushSubscription: text('push_subscription'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })

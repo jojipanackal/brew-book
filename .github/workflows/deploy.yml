@@ -1,9 +1,7 @@
 name: Deploy BrewBook
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -86,7 +84,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: deploy
           key: ${{ secrets.VPS_SSH_KEY }}
-          script: mkdir -p /var/www/brew-book
+          script: mkdir -p /var/www/brew-book/deploy/systemd
 
       - name: Upload Compose file
         uses: appleboy/scp-action@v0.1.7
@@ -95,6 +93,42 @@ jobs:
           username: deploy
           key: ${{ secrets.VPS_SSH_KEY }}
           source: docker-compose.yml
+          target: /var/www/brew-book
+
+      - name: Upload morning service unit
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: deploy/systemd/brew-book-push-morning.service
+          target: /var/www/brew-book
+
+      - name: Upload morning timer unit
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: deploy/systemd/brew-book-push-morning.timer
+          target: /var/www/brew-book
+
+      - name: Upload evening service unit
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: deploy/systemd/brew-book-push-evening.service
+          target: /var/www/brew-book
+
+      - name: Upload evening timer unit
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: deploy/systemd/brew-book-push-evening.timer
           target: /var/www/brew-book
 
       - name: Pull and restart BrewBook
@@ -109,4 +143,9 @@ jobs:
             cd /var/www/brew-book
             docker compose pull
             docker compose up -d --remove-orphans
+            sudo install -m 644 /var/www/brew-book/deploy/systemd/*.service /etc/systemd/system/
+            sudo install -m 644 /var/www/brew-book/deploy/systemd/*.timer /etc/systemd/system/
+            sudo systemctl daemon-reload
+            sudo systemctl enable --now brew-book-push-morning.timer brew-book-push-evening.timer
+            sudo systemctl restart brew-book-push-morning.timer brew-book-push-evening.timer
             docker image prune -f

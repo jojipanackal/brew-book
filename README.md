@@ -61,3 +61,4 @@ pnpm format    # format source files with Biome
 ```
 
 Drink defaults, daily responses, history, and poll details are persisted through the authenticated Drizzle API.
+just added contributors

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run BrewBook evening push notifications daily
+
+[Timer]
+OnCalendar=*-*-* 18:00:00 Asia/Kolkata
+Persistent=true
+Unit=brew-book-push-evening.service
+
+[Install]
+WantedBy=timers.target

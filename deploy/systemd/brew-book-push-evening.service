@@ -1,0 +1,9 @@
+[Unit]
+Description=BrewBook evening push notifications
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/var/www/brew-book
+ExecStart=/usr/bin/docker compose --profile worker run --rm --no-deps push-evening

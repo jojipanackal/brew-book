@@ -120,7 +120,7 @@ export const Route = createFileRoute('/api/profile')({
         const body = await request.json() as { company?: unknown; defaults?: Partial<Record<'morning' | 'evening', unknown>>; sugarDefaults?: Partial<Record<'morning' | 'evening', unknown>> }
         const profile = await readProfile(currentUser)
         const companyName = profile.company
-        if (!isCompany(companyName) || profile.accessDenied) return json({ error: 'Your work email is not registered with a MyBev company.' }, { status: 403 })
+        if (!isCompany(companyName) || profile.accessDenied) return json({ error: 'Your work email is not registered with a BrewBook company.' }, { status: 403 })
         const defaults = body.defaults
         if (!defaults || !isDrink(defaults.morning) || !isDrink(defaults.evening)) return json({ error: 'Choose both default drinks' }, { status: 400 })
         const validatedDefaults: DrinkChoice = { morning: defaults.morning, evening: defaults.evening }

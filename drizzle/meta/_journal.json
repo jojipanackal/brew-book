@@ -71,6 +71,13 @@
       "when": 1785140763573,
       "tag": "0009_mushy_mathemanic",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1753603200000,
+      "tag": "0010_push_subscription",
+      "breakpoints": true
     }
   ]
 }

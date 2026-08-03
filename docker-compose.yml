@@ -9,6 +9,25 @@ services:
       - "127.0.0.1:3003:3003"
     networks:
       - apps
+
+  push-morning:
+    image: ghcr.io/jojipanackal/brew-book:latest
+    profiles: [worker]
+    env_file:
+      - .env
+    command: ["dotenvx", "run", "-f", ".env.production", "--", "node_modules/.bin/tsx", "scripts/send-push.ts", "morning"]
+    networks:
+      - apps
+
+  push-evening:
+    image: ghcr.io/jojipanackal/brew-book:latest
+    profiles: [worker]
+    env_file:
+      - .env
+    command: ["dotenvx", "run", "-f", ".env.production", "--", "node_modules/.bin/tsx", "scripts/send-push.ts", "evening"]
+    networks:
+      - apps
+
 networks:
   apps:
     external: true

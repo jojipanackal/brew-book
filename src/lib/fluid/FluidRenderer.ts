@@ -85,7 +85,7 @@ export class FluidRenderer {
 		gl.useProgram(this.shader);
 		gl.uniform2f(gl.getUniformLocation(this.shader, "domainSize"), config.simWidth, config.simHeight);
 
-		const pointSize = 2.0 * fluid.particleRadius / config.simWidth * gl.canvas.width;
+		const pointSize = 5.0 * fluid.particleRadius / config.simWidth * gl.canvas.width;
 		gl.uniform1f(gl.getUniformLocation(this.shader, "pointSize"), pointSize);
 		gl.uniform1f(gl.getUniformLocation(this.shader, "drawDisk"), 1.0);
 

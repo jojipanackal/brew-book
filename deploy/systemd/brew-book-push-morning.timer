@@ -1,0 +1,10 @@
+[Unit]
+Description=Run BrewBook morning push notifications daily
+
+[Timer]
+OnCalendar=*-*-* 07:30:00 Asia/Kolkata
+Persistent=true
+Unit=brew-book-push-morning.service
+
+[Install]
+WantedBy=timers.target

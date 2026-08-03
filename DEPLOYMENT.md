@@ -73,6 +73,25 @@ echo "$GHCR_PAT" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
 
 The container listens only on `127.0.0.1:3003`. Put Nginx, Caddy, or another reverse proxy in front of it and proxy the public HTTPS domain to `http://127.0.0.1:3003`.
 
+## Schedule push notifications on the VPS
+
+Push notifications run as short-lived worker containers on the VPS. The worker services use the same production image and `.env` file as the web app, and are excluded from normal `docker compose up -d` startup through the `worker` profile.
+
+The deployment workflow installs and refreshes the systemd timers automatically. The `deploy` user must have passwordless `sudo` permission for `install` and `systemctl` commands. For example, after the first deployment, verify that the timers are active:
+
+```bash
+systemctl list-timers | grep brew-book
+```
+
+The default schedule is 07:30 and 18:00 Asia/Kolkata. Test a job manually with:
+
+```bash
+sudo systemctl start brew-book-push-morning.service
+sudo journalctl -u brew-book-push-morning.service -n 100 --no-pager
+```
+
+The VPS must retain database access through the VPC and DigitalOcean database trusted sources. The GitHub Actions push-notifications workflow is no longer needed because these timers are managed by the deployment workflow.
+
 ## First deployment
 
 Push the repository's `main` branch. The workflow is in `.github/workflows/deploy.yml` and starts automatically.
