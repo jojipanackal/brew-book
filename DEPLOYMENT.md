@@ -4,9 +4,8 @@ BrewBook follows this deployment shape:
 
 1. GitHub Actions builds a production Docker image.
 2. The image is pushed to GitHub Container Registry.
-3. GitHub Actions runs Drizzle migrations against the database URL configured in the repository secret.
-4. GitHub Actions uploads `docker-compose.yml` to the VPS.
-5. The VPS pulls the new image and restarts the container.
+3. GitHub Actions uploads `docker-compose.yml` to the VPS.
+4. The VPS pulls the new image, runs a one-shot migration container on the Docker network that contains PostgreSQL, and starts the app only after migration succeeds.
 
 ## Required GitHub secrets
 
@@ -14,19 +13,12 @@ Add these repository secrets under **Settings > Secrets and variables > Actions*
 
 | Secret | Purpose |
 | --- | --- |
-| `MIGRATION_DATABASE_URL` | PostgreSQL connection string used by CI migrations. It may be a plain container URL or a URL with `sslmode=require`. |
 | `DOTENV_PRIVATE_KEY_PRODUCTION` | Private dotenvx key for the encrypted `.env.production` file. |
 | `VPS_HOST` | Public hostname or IP address of the VPS. |
 | `VPS_SSH_KEY` | Private SSH key for the `deploy` user. |
 | `GHCR_PAT` | GitHub token with permission to pull the private container package on the VPS. |
 
-`MIGRATION_DATABASE_URL` should use the application database user, not the database admin user:
-
-```text
-postgresql://brewadmin:password@db-host:5432/brewdb
-```
-
-The migration job uses only this URL and does not decrypt `.env.production`. The database must be reachable from GitHub Actions; if the PostgreSQL container is private to the VPS Docker network, run migrations from the VPS instead or expose the database through a protected private/tunneled endpoint.
+The migration container uses the production `DATABASE_URL` and application database user from the encrypted `.env.production` file. PostgreSQL must be attached to the external Docker network named `apps`, and the URL must use the PostgreSQL container's network hostname.
 
 ## Prepare dotenvx production configuration
 
@@ -65,6 +57,13 @@ DOTENV_PRIVATE_KEY_PRODUCTION=your-dotenvx-private-key
 
 Set the production `DATABASE_URL` in `.env.production` to the PostgreSQL container's Docker-network address, for example `postgresql://brewadmin:password@postgres:5432/brewdb`. Omit `sslmode` for a private Docker network. If the database is exposed through TLS, use `?sslmode=require`; no CA variable is required unless you want strict CA verification.
 
+The PostgreSQL container must be connected to the same external network before deployment:
+
+```bash
+docker network create apps 2>/dev/null || true
+docker network connect apps <postgres-container>
+```
+
 Log in once from the VPS if the GitHub package is private:
 
 ```bash
@@ -90,17 +89,16 @@ sudo systemctl start brew-book-push-morning.service
 sudo journalctl -u brew-book-push-morning.service -n 100 --no-pager
 ```
 
-The VPS must retain database access through the VPC and DigitalOcean database trusted sources. The GitHub Actions push-notifications workflow is no longer needed because these timers are managed by the deployment workflow.
+The VPS must retain network access to the PostgreSQL container. The GitHub Actions push-notifications workflow is no longer needed because these timers are managed by the deployment workflow.
 
 ## First deployment
 
-Push the repository's `main` branch. The workflow is in `.github/workflows/deploy.yml` and starts automatically.
+Run the `Deploy BrewBook` workflow manually from the repository's **Actions** tab. The workflow is currently configured with `workflow_dispatch`.
 
 For the first deployment, check the jobs in this order:
 
 1. **Build and Push Image** succeeds and publishes `ghcr.io/<owner>/<repo>:latest`.
-2. **Run Database Migrations** temporarily adds the GitHub runner IP, applies the committed migrations, and removes the IP even if the migration fails.
-3. **Deploy to VPS** uploads the Compose file, pulls the image, and restarts the container.
+2. **Deploy to VPS** uploads the Compose file, pulls the image, runs the one-shot `migrate` service on the `apps` network, and only then starts the app.
 
 After the container starts:
 
@@ -128,4 +126,4 @@ Create and commit a migration locally:
 pnpm db:generate
 ```
 
-Do not run `db:push` in production. The deployment workflow runs the committed migrations before deploying the new image.
+Do not run `db:push` in production. The deployment workflow runs the committed migrations in the VPS-side `migrate` container before starting the new app image. A failed migration prevents the app from being started by that deployment.

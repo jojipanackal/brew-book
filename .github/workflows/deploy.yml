@@ -43,36 +43,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  migrate-db:
-    name: Run Database Migrations
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11.3.0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run Drizzle migrations
-        env:
-          DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
-        run: pnpm db:migrate
-
   deploy:
     name: Deploy to VPS
-    needs: migrate-db
+    needs: build-and-push
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -142,7 +115,8 @@ jobs:
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
             cd /var/www/brew-book
             docker compose pull
-            docker compose up -d --remove-orphans
+            docker compose run --rm migrate
+            docker compose up -d --remove-orphans app
             sudo install -m 644 /var/www/brew-book/deploy/systemd/*.service /etc/systemd/system/
             sudo install -m 644 /var/www/brew-book/deploy/systemd/*.timer /etc/systemd/system/
             sudo systemctl daemon-reload

@@ -33,6 +33,7 @@ RUN corepack enable && corepack prepare pnpm@11.3.0 --activate
 
 COPY --from=builder /app/.output ./.output
 COPY --from=builder /app/.env.production ./.env.production
+COPY --from=builder /app/drizzle ./drizzle
 # The push worker runs the existing TypeScript sender with tsx. Keep the
 # worker sources and dependencies in the same image as the web app so the
 # scheduled job uses the exact production build's runtime configuration.

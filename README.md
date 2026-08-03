@@ -43,9 +43,9 @@ pnpm db:migrate
 
 Use `pnpm db:push` for a local database when you do not need migration files.
 
-See [DB_SETUP.md](./DB_SETUP.md) for the complete DigitalOcean Managed PostgreSQL, Google OAuth, migration, and deployment setup.
+See [DB_SETUP.md](./DB_SETUP.md) for the complete PostgreSQL, Google OAuth, migration, and deployment setup.
 
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for the GitHub Actions, GHCR, DigitalOcean firewall, Docker, and VPS deployment process.
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for the GitHub Actions, GHCR, Docker, and VPS deployment process.
 
 Production configuration is encrypted with dotenvx. Local development uses `.env.local`; production uses the encrypted `.env.production` file and `DOTENV_PRIVATE_KEY_PRODUCTION`.
 

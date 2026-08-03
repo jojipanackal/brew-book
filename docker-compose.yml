@@ -1,4 +1,12 @@
 services:
+  migrate:
+    image: ghcr.io/jojipanackal/brew-book:latest
+    env_file:
+      - .env
+    command: ["dotenvx", "run", "-f", ".env.production", "--", "node_modules/.bin/tsx", "scripts/migrate.ts"]
+    networks:
+      - apps
+
   app:
     image: ghcr.io/jojipanackal/brew-book:latest
     container_name: brew-book

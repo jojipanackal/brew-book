@@ -186,7 +186,7 @@ Open [http://localhost:3000](http://localhost:3000). Sign in with a Google Works
 
 ## 8. Deploy
 
-The repository includes a GitHub Actions plus Docker Compose deployment process modeled after `dev-utils`. See [DEPLOYMENT.md](./DEPLOYMENT.md) for the required GitHub secrets and VPS setup.
+The repository includes a GitHub Actions plus Docker Compose deployment process. See [DEPLOYMENT.md](./DEPLOYMENT.md) for the required GitHub secrets and VPS setup.
 
 Configure these environment variables in the hosting provider:
 
