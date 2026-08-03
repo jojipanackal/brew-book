@@ -97,6 +97,11 @@ html {
 	background: var(--c-page);
 }
 
+#root {
+	min-height: 100dvh;
+	background: var(--c-page);
+}
+
 body {
 	min-width: 320px;
 	min-height: 100svh;

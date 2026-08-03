@@ -956,7 +956,7 @@ function App() {
 		<ErrorBoundary fallback={AppErrorFallback}>
 			<main
 				className={cx(
-					"min-h-svh bg-[var(--c-page)] text-[var(--c-text)] lg:pb-0",
+					"min-h-dvh bg-[var(--c-page)] text-[var(--c-text)] lg:pb-0",
 				)}
 				style={{
 					paddingTop: "calc(57px + env(safe-area-inset-top))",
