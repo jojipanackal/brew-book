@@ -25,7 +25,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         content: 'width=device-width, initial-scale=1, viewport-fit=cover',
       },
       {
-        title: 'MyBev',
+        title: 'BrewBook',
       },
       {
         name: 'theme-color',
@@ -45,7 +45,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       },
       {
         name: 'apple-mobile-web-app-title',
-        content: 'MyBev',
+        content: 'BrewBook',
       },
     ],
     links: [

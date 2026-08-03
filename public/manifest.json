@@ -1,6 +1,6 @@
 {
-  "name": "MyBev",
-  "short_name": "MyBev",
+  "name": "BrewBook",
+  "short_name": "BrewBook",
   "description": "Office drink register — choose your morning and evening drinks",
   "start_url": "/",
   "display": "standalone",

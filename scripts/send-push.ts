@@ -62,7 +62,7 @@ async function run() {
       await webpush.sendNotification(
         JSON.parse(sub.pushSubscription),
         JSON.stringify({
-          title: 'MyBev',
+          title: 'BrewBook',
           body: message,
           url: '/',
         })

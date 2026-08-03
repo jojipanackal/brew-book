@@ -15,7 +15,7 @@ services:
     profiles: [worker]
     env_file:
       - .env
-    command: ["dotenvx", "run", "-f", ".env.production", "--", "pnpm", "push:send-morning"]
+    command: ["dotenvx", "run", "-f", ".env.production", "--", "node_modules/.bin/tsx", "scripts/send-push.ts", "morning"]
     networks:
       - apps
 
@@ -24,7 +24,7 @@ services:
     profiles: [worker]
     env_file:
       - .env
-    command: ["dotenvx", "run", "-f", ".env.production", "--", "pnpm", "push:send-evening"]
+    command: ["dotenvx", "run", "-f", ".env.production", "--", "node_modules/.bin/tsx", "scripts/send-push.ts", "evening"]
     networks:
       - apps
 

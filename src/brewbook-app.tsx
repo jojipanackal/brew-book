@@ -56,7 +56,6 @@ import {
 	initSentryClient,
 	syncSentryUser,
 } from "#/lib/sentry";
-import { Bell, BellOff } from "lucide-react";
 
 type AppState = {
 	user: User | null;
@@ -337,113 +336,12 @@ function AppErrorFallback() {
 			<section className="w-full max-w-sm rounded-3xl bg-[var(--c-card)] p-8 text-center shadow-[0_20px_60px_rgba(77,57,38,0.1)]">
 				<h1 className="font-serif text-3xl">Something went wrong</h1>
 				<p className="mt-3 text-sm leading-6 text-[var(--c-text-muted)]">
-					MyBev hit an unexpected error. Refresh the page or try again in a
+					BrewBook hit an unexpected error. Refresh the page or try again in a
 					moment.
 				</p>
 			</section>
 		</main>
 	);
-}
-
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined
-
-function urlBase64ToUint8Array(base64String: string) {
-	const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
-	const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
-	const raw = atob(base64)
-	return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)))
-}
-
-function usePushNotifications(userId: string | undefined) {
-	const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>('unsupported')
-	const [dismissed, setDismissed] = useState(false)
-
-	useEffect(() => {
-		if (typeof Notification !== 'undefined') {
-			setPermission(Notification.permission)
-		}
-		setDismissed(localStorage.getItem('push-dismissed') === '1')
-	}, [])
-
-	async function subscribe() {
-		if (!VAPID_PUBLIC_KEY || !userId) return
-		try {
-			const reg = await navigator.serviceWorker.ready
-			const sub = await reg.pushManager.subscribe({
-				userVisibleOnly: true,
-				applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-			})
-			setPermission('granted')
-			await fetch('/api/push', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ subscription: sub }),
-			})
-		} catch {
-			setPermission(Notification.permission)
-		}
-	}
-
-	async function unsubscribe() {
-		try {
-			const reg = await navigator.serviceWorker.ready
-			const sub = await reg.pushManager.getSubscription()
-			if (sub) await sub.unsubscribe()
-			await fetch('/api/push', { method: 'DELETE' })
-			setPermission('default')
-		} catch {
-			// ignore
-		}
-	}
-
-	function dismiss() {
-		localStorage.setItem('push-dismissed', '1')
-		setDismissed(true)
-	}
-
-	const showBanner =
-		VAPID_PUBLIC_KEY &&
-		permission !== 'unsupported' &&
-		permission !== 'granted' &&
-		permission !== 'denied' &&
-		!dismissed
-
-	return { permission, showBanner: Boolean(showBanner), subscribe, unsubscribe, dismiss }
-}
-
-function PushBanner({ onEnable, onDismiss }: { onEnable: () => void; onDismiss: () => void }) {
-	return (
-		<div className="mx-auto mt-4 max-w-[1180px] px-4 sm:px-6 lg:px-8">
-			<div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--c-border)] bg-[var(--c-card)] px-4 py-3 shadow-sm">
-				<div className="flex items-center gap-3">
-					<span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[var(--c-brand-bg)] text-[var(--c-brand)]">
-						<Bell size={17} />
-					</span>
-					<div>
-						<p className="text-sm font-semibold text-[var(--c-text-dark)]">Get drink reminders</p>
-						<p className="text-xs text-[var(--c-text-muted)]">We'll nudge you at morning and evening rounds ☕</p>
-					</div>
-				</div>
-				<div className="flex shrink-0 items-center gap-2">
-					<button
-						onClick={onDismiss}
-						type="button"
-						className="grid size-8 place-items-center rounded-lg text-[var(--c-text-muted)] transition hover:bg-[var(--c-hover)]"
-						aria-label="Dismiss"
-					>
-						<XIcon size={16} />
-					</button>
-					<button
-						onClick={onEnable}
-						type="button"
-						className="min-h-9 rounded-lg bg-[var(--c-brand)] px-3 text-xs font-semibold text-white transition hover:opacity-90"
-					>
-						Enable
-					</button>
-				</div>
-			</div>
-		</div>
-	)
 }
 
 function App() {
@@ -985,7 +883,6 @@ function App() {
 			);
 	}
 
-	const push = usePushNotifications(sessionUserId)
 	const [leaveLoading, setLeaveLoading] = useState(false);
 	function toggleLeave() {
 		if (!state.user || leaveLoading) return;
@@ -1068,10 +965,10 @@ function App() {
 			>
 				<header className="fixed inset-x-0 top-0 z-10 border-b border-[var(--c-border)] bg-[var(--c-card)]/95 backdrop-blur" style={{ paddingTop: "env(safe-area-inset-top)" }}>
 					<div className="mx-auto flex max-w-[1180px] items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
-					<button type="button" onClick={tapLogo} className="flex items-center gap-2.5" aria-label="MyBev logo">
+					<button type="button" onClick={tapLogo} className="flex items-center gap-2.5" aria-label="BrewBook logo">
 						<BrandMark />
 						<span className="font-serif text-xl font-semibold tracking-[-0.02em]">
-							MyBev
+							BrewBook
 						</span>
 					</button>
 						<button
@@ -1084,12 +981,6 @@ function App() {
 						</button>
 					</div>
 				</header>
-				{push.showBanner && !isGuest && (
-					<PushBanner
-						onEnable={() => void push.subscribe()}
-						onDismiss={push.dismiss}
-					/>
-				)}
 				{error && (
 					<div className="mx-auto mt-4 max-w-[1180px] px-4 sm:px-6 lg:px-8">
 						<div
@@ -1150,7 +1041,6 @@ function App() {
 								setHistoryDate={setHistoryDate}
 								historyPolls={historyPolls}
 								historyLoading={historyLoading}
-								push={push}
 							/>
 						)}
 						{view === "admin" && (
@@ -1650,7 +1540,6 @@ function ProfileView({
 	setHistoryDate,
 	historyPolls,
 	historyLoading,
-	push,
 }: {
 	user: User;
 	defaults: DrinkChoice;
@@ -1664,12 +1553,9 @@ function ProfileView({
 	setHistoryDate: (d: string) => void;
 	historyPolls: PollRecord[];
 	historyLoading: boolean;
-	push: ReturnType<typeof usePushNotifications>;
 }) {
 	const [defaultsOpen, setDefaultsOpen] = useState(false);
 	const [historyOpen, setHistoryOpen] = useState(false);
-	const notifEnabled = push.permission === 'granted'
-	const notifUnsupported = push.permission === 'unsupported' || push.permission === 'denied'
 	function tapAvatar() {
 		window.open("https://www.youtube.com/watch?v=xvFZjo5PgG0", "_blank");
 	}
@@ -1718,31 +1604,6 @@ function ProfileView({
 							/>
 						</button>
 					</div>
-
-					{/* Notifications row */}
-					{!notifUnsupported && !isGuest && (
-						<div className="flex items-center justify-between border-t border-[var(--c-border)] px-4 py-3.5">
-							<span className="flex items-center gap-2.5 text-sm font-semibold text-[var(--c-text-mid)]">
-								<Bell size={15} />
-								Drink reminders
-							</span>
-							<button
-								type="button"
-								onClick={() => notifEnabled ? void push.unsubscribe() : void push.subscribe()}
-								aria-label="Toggle notifications"
-								aria-pressed={notifEnabled}
-								className="relative h-6 w-11 rounded-full transition-colors duration-200"
-								style={{ background: notifEnabled ? 'var(--c-brand)' : 'var(--c-toggle-off)' }}
-							>
-								<span
-									className={cx(
-										'absolute top-1 size-4 rounded-full bg-[var(--c-cream)] shadow transition-all duration-200',
-										notifEnabled ? 'left-6' : 'left-1',
-									)}
-								/>
-							</button>
-						</div>
-					)}
 
 					{/* Drink defaults row */}
 					{!isGuest && (
@@ -1889,7 +1750,7 @@ function SignInPage({
 					iconColor="#5a3c26"
 					iconSize={30}
 				/>
-				<h1 className="mt-7 font-serif text-5xl leading-tight">MyBev</h1>
+				<h1 className="mt-7 font-serif text-5xl leading-tight">BrewBook</h1>
 				<p className="mt-4 max-w-xs text-[15px] leading-6 text-[#e7d8c4]">
 					Use your work email to continue.
 				</p>
@@ -1937,7 +1798,7 @@ function AccessDeniedPage({ authError = false, onSignOut }: { authError?: boolea
 					href="/"
 					className="mt-7 inline-flex min-h-11 items-center rounded-xl bg-[var(--c-brand)] px-5 text-sm font-semibold text-white"
 					>
-						Back to MyBev
+						Back to BrewBook
 					</a>
 				) : (
 					<button

@@ -85,8 +85,8 @@ export async function readDay(userId: string | undefined, date: string) {
 export async function ensureTodayResponses(companyId: string, date: string) {
   if (date !== todayKey()) return
 
-  const members = await db.select({ id: user.id, isGuest: user.isGuest, guestStatus: user.guestStatus, isOnLeave: user.isOnLeave }).from(user).where(eq(user.companyId, companyId))
-  const eligibleMembers = members.filter((member) => !member.isOnLeave && (!member.isGuest || member.guestStatus === 'approved'))
+  const members = await db.select({ id: user.id, isGuest: user.isGuest, isOnLeave: user.isOnLeave }).from(user).where(eq(user.companyId, companyId))
+  const eligibleMembers = members.filter((member) => !member.isOnLeave && !member.isGuest)
   if (!eligibleMembers.length) return
 
   const memberIds = eligibleMembers.map((member) => member.id)
@@ -120,6 +120,9 @@ export const Route = createFileRoute('/api/drinks')({
         if (!currentUser) return json({ error: 'Unauthorized' }, { status: 401 })
         const requestedDate = new URL(request.url).searchParams.get('date')
         if (!isDate(requestedDate)) return json({ error: 'A valid date is required' }, { status: 400 })
+        if (currentUser.email.endsWith('@guest.brewbook.local') && requestedDate !== todayKey()) {
+          return json({ error: 'Guest polls are valid for today only' }, { status: 400 })
+        }
         const currentUserCompany = await db.select({ companyId: user.companyId }).from(user).where(eq(user.id, currentUser.id)).limit(1)
         const companyId = currentUserCompany[0]?.companyId
         if (!companyId) return json({ error: 'Your account is not assigned to a company' }, { status: 403 })
