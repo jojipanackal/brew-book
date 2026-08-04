@@ -3,8 +3,10 @@ import {
 	ArrowLeft,
 	ArrowRight,
 	BarChart2,
+	CalendarOff,
 	CalendarDays,
 	Check,
+	ChevronDown,
 	ChevronRight,
 	Coffee,
 	Eye,
@@ -2007,29 +2009,6 @@ function TodayView({
 	const morningClosed = nowIST >= 11 * 60;
 	const eveningClosed = nowIST >= 15 * 60 + 15;
 
-	const morningClosedMessages = [
-		"No coffee for you! The morning window closed at 11 AM.",
-		"The kettle has gone cold. Morning poll is done.",
-		"You snooze, you lose the morning brew.",
-		"Morning window closed. The beans have moved on.",
-		"Too late for morning, too early for regrets.",
-	];
-	const eveningClosedMessages = [
-		"The evening round is a wrap. Go drink some water.",
-		"Poll closed at 3:15. Your tea waited... it left.",
-		"Evening window shut. Even the chai went home.",
-		"You missed the evening round. Decaf is your punishment.",
-		"Poll o'clock was 3:15. It is now too late o'clock.",
-	];
-
-	function pickRoundRobin(arr: string[], seed: string) {
-		const idx = seed.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % arr.length;
-		return arr[idx];
-	}
-
-	const morningMsg = pickRoundRobin(morningClosedMessages, todayKey + "m");
-	const eveningMsg = pickRoundRobin(eveningClosedMessages, todayKey + "e");
-
 	const isPeriodClosed = (id: Period) => (id === "morning" ? morningClosed : eveningClosed);
 
 	// Twinkle Twinkle Little Star — C C G G A A G, F F E E D D C, ...
@@ -2064,12 +2043,13 @@ function TodayView({
 				title={pianoMode ? "🎹 Piano Mode" : "Today"}
 				action={pianoMode ? "tap to play" : `${todayPolls.length} people`}
 			/>
-			{!guest && <AvailabilityControl availability={availability} loading={availabilityLoading} onChange={onUpdateAvailability} />}
+			{!guest && <AvailabilityControl availability={availability} loading={availabilityLoading} nowIST={nowIST} onChange={onUpdateAvailability} />}
 			<div className="grid gap-3">
-				{periodDetails.map((period) => (
+				{(nowIST >= 12 * 60 ? [...periodDetails].reverse() : periodDetails).map((period) => (
 					<div key={period.id} className="grid gap-0">
 						<DrinkPoll
 							period={period}
+							closed={isPeriodClosed(period.id)}
 							polls={todayPolls}
 							selected={entry[period.id]}
 							sugar={sugar[period.id]}
@@ -2078,32 +2058,24 @@ function TodayView({
 							onToggleSugar={isPeriodClosed(period.id) ? undefined : (next) => updateSugar(period.id, next)}
 							onOpen={guest || isPeriodClosed(period.id) ? undefined : () => onOpen(period.id)}
 						/>
-						{isPeriodClosed(period.id) && (
-							<div className="rounded-b-2xl border border-t-0 border-[var(--c-border)] bg-[var(--c-muted)] px-4 py-3 text-center">
-								<p className="text-sm font-semibold text-[var(--c-text-mid)]">
-									{period.id === "morning" ? morningMsg : eveningMsg}
-								</p>
-								<p className="mt-1 text-xs text-[var(--c-text-muted)]">
-									Need to fix your response? Contact your admin.
-								</p>
-							</div>
-						)}
 					</div>
 				))}
 			</div>
 		</div>
 	);
 }
-function AvailabilityControl({ availability, loading, onChange }: { availability: Record<Period, AttendanceStatus>; loading: Period | null; onChange?: (period: Period, status: AttendanceStatus) => void }) {
+function AvailabilityControl({ availability, loading, nowIST, onChange }: { availability: Record<Period, AttendanceStatus>; loading: Period | null; nowIST: number; onChange?: (period: Period, status: AttendanceStatus) => void }) {
 	const labels: Record<AttendanceStatus, string> = { office: "In office", wfh: "Working from home", leave: "On leave" };
-	const active = periods.filter((period) => availability[period] !== "office");
+	const visiblePeriods = periods.filter((period) => period === "morning" ? nowIST < 11 * 60 : nowIST < 15 * 60 + 15);
+	if (visiblePeriods.length === 0) return null;
 	return (
-		<details className="rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] px-4 py-3">
-			<summary className="cursor-pointer list-none text-sm font-semibold text-[var(--c-text-mid)]">
-				Set today’s availability{active.length ? ` · ${active.map((period) => labels[availability[period]]).join(", ")}` : ""}
+		<details className="group rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] px-4 py-3 shadow-[0_8px_30px_rgba(77,57,38,0.03)]">
+			<summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-[var(--c-text-mid)]">
+				<span className="flex items-center gap-2.5"><CalendarOff size={17} className="text-[var(--c-brand-lt)]" />Mark your absence</span>
+				<ChevronDown size={17} className="text-[var(--c-text-muted)] transition-transform group-open:rotate-180" />
 			</summary>
 			<div className="mt-3 grid gap-3 border-t border-[var(--c-border-2)] pt-3 sm:grid-cols-2">
-				{periods.map((period) => (
+				{visiblePeriods.map((period) => (
 					<label key={period} className="grid gap-1.5 text-xs font-semibold text-[var(--c-text-muted)]">
 						<span>{period === "morning" ? "Morning" : "Evening"}</span>
 						<select
@@ -2618,6 +2590,7 @@ function SugarToggle({
 }
 function DrinkPoll({
 	period,
+	closed = false,
 	polls,
 	selected,
 	sugar,
@@ -2627,6 +2600,7 @@ function DrinkPoll({
 	onOpen,
 }: {
 	period: { id: Period; label: string; helper: string };
+	closed?: boolean;
 	polls: PollRecord[];
 	selected?: Drink;
 	sugar: boolean;
@@ -2658,12 +2632,18 @@ function DrinkPoll({
 				</span>
 				<SugarToggle
 					compact
-					disabled={selected === "No drink"}
+					disabled={closed || selected === "No drink"}
 					sugar={sugar}
 					onChange={onToggleSugar ?? (() => undefined)}
 				/>
 			</div>
-			<div className="grid gap-2 p-3 sm:p-4">
+			{closed && (
+				<div className="flex items-center gap-2 border-b border-[var(--c-border-2)] bg-[var(--c-muted)] px-4 py-2.5 text-xs font-semibold text-[var(--c-text-muted)] sm:px-5">
+					<span className="size-1.5 rounded-full bg-[var(--c-brand-lt)]" />
+					Poll closed
+				</div>
+			)}
+			<div className={cx("grid gap-2 p-3 transition-[filter,opacity] sm:p-4", closed && "blur-[2px] opacity-55")}>
 				{drinks.map((drink) => {
 					const count = counts[drink];
 					const percent = total ? Math.round((counts[drink] / total) * 100) : 0;
@@ -2715,7 +2695,7 @@ function DrinkPoll({
 					);
 				})}
 			</div>
-			{onOpen && (
+			{onOpen && !closed && (
 				<button
 					className="mx-3 mb-3 flex min-h-11 w-[calc(100%-1.5rem)] items-center justify-center gap-2 rounded-xl bg-[var(--c-brand)] text-sm font-semibold text-white transition hover:bg-[var(--c-text-mid)] sm:mx-4 sm:mb-4 sm:w-[calc(100%-2rem)]"
 					onClick={onOpen}
