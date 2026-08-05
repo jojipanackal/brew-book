@@ -461,7 +461,11 @@ function App() {
 	const todaysSugar = todayPoll?.sugar ?? state.sugarDefaults;
 	const todayPolls = state.entries[todayKey] ?? [];
 	const isGuest = Boolean(guestSession);
+	const visibleView: View = isGuest ? "today" : view;
 	const signInError = authErrorMessage();
+	useEffect(() => {
+		if (isGuest && view !== "today") setView("today");
+	}, [isGuest, view]);
 	useEffect(() => {
 		syncSentryUser(
 			state.user
@@ -1002,7 +1006,7 @@ function App() {
 						</aside>
 					)}
 					<section className="min-w-0">
-						{view === "today" && (
+						{visibleView === "today" && (
 							<TodayView
 								guest={isGuest}
 								entry={todaysEntry}
@@ -1017,10 +1021,10 @@ function App() {
 								pianoMode={pianoMode}
 							/>
 						)}
-						{view === "stats" && !isGuest && (
+						{visibleView === "stats" && !isGuest && (
 							<StatsView />
 						)}
-						{view === "profile" && (
+						{visibleView === "profile" && !isGuest && (
 							<ProfileView
 								user={state.user}
 								defaults={state.defaults}
@@ -1036,7 +1040,7 @@ function App() {
 								historyLoading={historyLoading}
 							/>
 						)}
-						{view === "admin" && (
+						{visibleView === "admin" && !isGuest && (
 							<AdminView
 								data={adminData}
 								onRefresh={() => void getAdminDashboard().then(setAdminData)}
@@ -2056,7 +2060,7 @@ function TodayView({
 							editable={!isPeriodClosed(period.id) && availability[period.id] === "office"}
 							onSelect={isPeriodClosed(period.id) ? undefined : (drink) => (pianoMode ? pianoSelect(period.id, drink) : updateEntry(period.id, drink))}
 							onToggleSugar={isPeriodClosed(period.id) ? undefined : (next) => updateSugar(period.id, next)}
-							onOpen={guest || isPeriodClosed(period.id) ? undefined : () => onOpen(period.id)}
+							onOpen={() => onOpen(period.id)}
 						/>
 					</div>
 				))}
@@ -2643,7 +2647,7 @@ function DrinkPoll({
 					Poll closed
 				</div>
 			)}
-			<div className={cx("grid gap-2 p-3 transition-[filter,opacity] sm:p-4", closed && "blur-[2px] opacity-55")}>
+			<div className="grid gap-2 p-3 sm:p-4">
 				{drinks.map((drink) => {
 					const count = counts[drink];
 					const percent = total ? Math.round((counts[drink] / total) * 100) : 0;
@@ -2695,7 +2699,7 @@ function DrinkPoll({
 					);
 				})}
 			</div>
-			{onOpen && !closed && (
+			{onOpen && (
 				<button
 					className="mx-3 mb-3 flex min-h-11 w-[calc(100%-1.5rem)] items-center justify-center gap-2 rounded-xl bg-[var(--c-brand)] text-sm font-semibold text-white transition hover:bg-[var(--c-text-mid)] sm:mx-4 sm:mb-4 sm:w-[calc(100%-2rem)]"
 					onClick={onOpen}
