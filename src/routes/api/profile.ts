@@ -1,4 +1,4 @@
-import { and, eq, gt, sql } from 'drizzle-orm'
+import { and, eq, gt } from 'drizzle-orm'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { db } from '#/db'
@@ -90,11 +90,12 @@ async function claimGuestResponses(request: Request, currentUser: { id: string; 
 }
 
 async function readProfile(currentUser: { id: string; email: string }) {
+  const normalizedEmail = currentUser.email.trim().toLowerCase()
   const [userRow, defaultRows, companyRows, adminRows, availabilityRows] = await Promise.all([
     db.select({ companyId: user.companyId, legacyCompany: user.company, role: user.role, isOnLeave: user.isOnLeave }).from(user).where(eq(user.id, currentUser.id)).limit(1),
     db.select({ period: drinkDefault.period, drink: drinkDefault.drink, sugar: drinkDefault.sugar }).from(drinkDefault).where(eq(drinkDefault.userId, currentUser.id)),
     db.select({ id: company.id, name: company.name, emailEnding1: company.emailEnding1, emailEnding2: company.emailEnding2 }).from(company),
-    db.select({ email: companyAdmin.email }).from(companyAdmin).where(sql`lower(${companyAdmin.email}) = lower(${currentUser.email})`),
+    db.select({ email: companyAdmin.email }).from(companyAdmin).where(eq(companyAdmin.email, normalizedEmail)),
     db.select({ period: attendance.period, status: attendance.status }).from(attendance).where(and(eq(attendance.userId, currentUser.id), eq(attendance.date, todayKey()))),
   ])
   const email = currentUser.email.trim().toLowerCase()

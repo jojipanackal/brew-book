@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { db } from '#/db'
@@ -20,9 +20,10 @@ function isDrink(value: unknown): value is Drink { return typeof value === 'stri
 async function getAdmin(request: Request) {
   const session = await auth.api.getSession({ headers: request.headers })
   if (!session?.user) return null
+  const normalizedEmail = session.user.email.trim().toLowerCase()
   const [userRow, memberships] = await Promise.all([
     db.select({ id: user.id, role: user.role, companyId: user.companyId }).from(user).where(eq(user.id, session.user.id)).limit(1),
-    db.select({ companyId: companyAdmin.companyId }).from(companyAdmin).where(sql`lower(${companyAdmin.email}) = lower(${session.user.email})`),
+    db.select({ companyId: companyAdmin.companyId }).from(companyAdmin).where(eq(companyAdmin.email, normalizedEmail)),
   ])
   if (userRow[0]?.role === 'admin') return { userId: session.user.id, companyIds: null as string[] | null }
   if (!memberships.length) return null
