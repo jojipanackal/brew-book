@@ -23,7 +23,12 @@ import { useEffect, useRef, useState } from "react";
 
 import { FlipFluid, FluidRenderer, setupFluidScene } from "#/lib/fluid";
 
-import { authClient } from "#/lib/auth-client";
+import {
+	authClient,
+	getLocalUser,
+	loginLocalUser,
+	logoutLocalUser,
+} from "#/lib/auth-client";
 import {
 	type AdminDashboard,
 	type AttendanceStatus,
@@ -68,6 +73,7 @@ type AppState = {
 };
 type View = "today" | "stats" | "profile" | "admin";
 type OpenPoll = { date: string; period: Period } | null;
+const localAuthEnabled = import.meta.env.VITE_LOCAL_AUTH === "true";
 type OnboardingState = {
 	company: Company | "";
 	defaults: DrinkChoice;
@@ -441,17 +447,18 @@ function App() {
 	const [profileReady, setProfileReady] = useState(false);
 	const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
 	const [localUser, setLocalUser] = useState<User | null>(null);
-	const [localComplete, setLocalComplete] = useState(false);
+	const [localPending, setLocalPending] = useState(localAuthEnabled);
 	const [guestSession, setGuestSession] = useState<GuestSession | null>(null);
 	const [guestPending, setGuestPending] = useState(true);
 	const [guestSetup, setGuestSetup] = useState(false);
 	const [accessDenied, setAccessDenied] = useState(false);
 	const [adminData, setAdminData] = useState<AdminDashboard | null>(null);
 	const { data: session, isPending: authPending } = authClient.useSession();
-	const sessionUserId = session?.user?.id;
-	const sessionUserName = session?.user?.name;
-	const sessionUserEmail = session?.user?.email;
-	const sessionUserImage = session?.user?.image;
+	const authenticatedUser = session?.user ?? localUser;
+	const sessionUserId = authenticatedUser?.id;
+	const sessionUserName = authenticatedUser?.name;
+	const sessionUserEmail = authenticatedUser?.email;
+	const sessionUserImage = authenticatedUser?.image;
 	const todayPoll = state.user
 		? state.entries[todayKey]?.find(
 				(entry) => entry.user.email === state.user?.email,
@@ -480,6 +487,32 @@ function App() {
 	}, [state.user]);
 	useEffect(() => {
 		if (authPending) return;
+		if (session?.user) {
+			setLocalUser(null);
+			setLocalPending(false);
+			return;
+		}
+		if (!localAuthEnabled) {
+			setLocalPending(false);
+			return;
+		}
+		let cancelled = false;
+		void getLocalUser()
+			.then((nextUser) => {
+				if (!cancelled) setLocalUser(nextUser);
+			})
+			.catch(() => {
+				if (!cancelled) setLocalUser(null);
+			})
+			.finally(() => {
+				if (!cancelled) setLocalPending(false);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [authPending, session?.user?.id]);
+	useEffect(() => {
+		if (authPending || localPending) return;
 		if (sessionUserId) {
 			setGuestSession(null);
 			setGuestPending(false);
@@ -489,7 +522,7 @@ function App() {
 			.then(setGuestSession)
 			.catch(() => setGuestSession(null))
 			.finally(() => setGuestPending(false));
-	}, [authPending, sessionUserId]);
+	}, [authPending, localPending, sessionUserId]);
 	useEffect(() => {
 		if (guestSession?.status !== "pending") return;
 		let cancelled = false;
@@ -507,19 +540,6 @@ function App() {
 	}, [guestSession?.status]);
 	useEffect(() => {
 		let cancelled = false;
-		if (localUser) {
-			setState({ ...initialState, user: localUser });
-			setOnboarding({
-				company: "Local",
-				defaults: initialState.defaults,
-				sugarDefaults: initialState.sugarDefaults,
-				step: "morning",
-			});
-			setProfileReady(true);
-			return () => {
-				cancelled = true;
-			};
-		}
 		if (guestSession) {
 			setState({
 				...initialState,
@@ -736,22 +756,23 @@ function App() {
 	}
 	function signOut() {
 		if (guestSession) void leaveGuest();
+		else if (localUser) void logoutLocalUser();
 		else void authClient.signOut();
 		setGuestSession(null);
 		setGuestSetup(false);
 		setAccessDenied(false);
 		setAdminData(null);
 		setLocalUser(null);
-		setLocalComplete(false);
 		setState((current) => ({ ...current, user: null }));
 	}
-	function signUpLocally() {
-		setLocalComplete(false);
-		setLocalUser({
-			id: "local-test-user",
-			name: "Local test user",
-			email: "local@brewbook.test",
-		});
+	async function loginLocally() {
+		try {
+			const nextUser = await loginLocalUser();
+			setLocalUser(nextUser);
+			setError(null);
+		} catch (reason: unknown) {
+			setError(reason instanceof Error ? reason.message : "Local login failed");
+		}
 	}
 	async function finishGuestSetup(name: string, company: Company) {
 		try {
@@ -770,11 +791,6 @@ function App() {
 	async function finishOnboarding() {
 		const currentOnboarding = onboarding;
 		if (!currentOnboarding?.company) return;
-		if (localUser) {
-			setOnboarding(null);
-			setLocalComplete(true);
-			return;
-		}
 		try {
 			const profile = await completeOnboarding({
 				company: currentOnboarding.company,
@@ -906,7 +922,7 @@ function App() {
 			.finally(() => setAvailabilityLoading(null));
 	}
 
-	if (authPending || guestPending) return <AuthLoading message={pickRandom(brewingMessages)} />;
+	if (authPending || localPending || guestPending) return <AuthLoading message={pickRandom(brewingMessages)} />;
 	if (signInError && !session?.user && !localUser && !guestSession)
 		return <AccessDeniedPage authError />;
 	if (!session?.user && !localUser && !guestSession)
@@ -926,10 +942,9 @@ function App() {
 					setGuestSetup(true);
 					setError(null);
 				}}
-				onLocalSignUp={import.meta.env.DEV ? signUpLocally : undefined}
+				onLocalLogin={localAuthEnabled ? loginLocally : undefined}
 			/>
 		);
-	if (localComplete) return <LocalSetupComplete onReset={signOut} />;
 	if (!state.user) return <AuthLoading message={pickRandom(brewingMessages)} />;
 	if (!profileReady) return <AuthLoading message={pickRandom(brewingMessages)} />;
 	if (accessDenied) return <AccessDeniedPage onSignOut={signOut} />;
@@ -972,9 +987,12 @@ function App() {
 							onClick={tapName}
 							type="button"
 							aria-label="Open profile"
-							className="text-sm font-semibold text-[var(--c-text-mid)] transition hover:text-[var(--c-brand)]"
+							className="flex items-center gap-2 rounded-full bg-[var(--c-accent-bg)] py-1.5 pl-3.5 pr-2 text-sm font-bold text-[var(--c-text-mid)] transition hover:text-[var(--c-brand)]"
 						>
 							Hi, {state.user.name.split(" ")[0]}
+							<span className="grid size-6 place-items-center rounded-full bg-[var(--c-brand)] text-[10px] font-bold text-[var(--c-cream)]">
+								{initials(state.user.name)}
+							</span>
 						</button>
 					</div>
 				</header>
@@ -1442,18 +1460,24 @@ function Nav({
 							key={item.id}
 							onClick={() => item.id === "today" && onPollClick ? onPollClick() : setView(item.id)}
 							type="button"
-							className="relative flex flex-col items-center gap-0.5 pb-2 pt-3 transition-colors"
+							className="press-none relative flex flex-col items-center gap-0.5 pb-2 pt-2.5 transition-colors"
 						>
-							{active && (
-								<span className="absolute inset-x-4 top-0 h-[2px] rounded-b-full bg-[var(--c-brand)]" />
-							)}
-							<span className={cx("relative transition-colors", active ? "text-[var(--c-brand)]" : "text-[var(--c-text-dim)]")}>
-								{active ? item.iconActive : item.icon}
+							<span
+								className={cx(
+									"relative grid h-8 w-14 place-items-center rounded-full transition-colors",
+									active
+										? "bg-[var(--c-accent-bg)] text-[var(--c-brand)]"
+										: "text-[var(--c-text-dim)]",
+								)}
+							>
+								<span className={cx(active && "animate-pop")}>
+									{active ? item.iconActive : item.icon}
+								</span>
 								{item.id === "today" && pianoOn && (
-									<span className="absolute -top-1 -right-1 size-2 rounded-full bg-green-400 animate-pulse" />
+									<span className="absolute -top-0.5 right-2.5 size-2 rounded-full bg-green-400 animate-pulse" />
 								)}
 							</span>
-							<span className={cx("text-[10px] font-semibold tracking-wide transition-colors", active ? "text-[var(--c-brand)]" : "text-[var(--c-text-dim)]")}>
+							<span className={cx("text-[10px] font-bold tracking-wide transition-colors", active ? "text-[var(--c-brand)]" : "text-[var(--c-text-dim)]")}>
 								{item.id === "today" && pianoOn ? "🎹" : item.label}
 							</span>
 						</button>
@@ -1471,9 +1495,9 @@ function Nav({
 					onClick={() => item.id === "today" && onPollClick ? onPollClick() : setView(item.id)}
 					type="button"
 					className={cx(
-						"flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl px-2 text-[11px] font-semibold transition lg:flex-row lg:justify-start lg:gap-2 lg:px-3 lg:text-sm",
+						"flex min-h-12 flex-col items-center justify-center gap-1 rounded-2xl px-2 text-[11px] font-bold transition lg:flex-row lg:justify-start lg:gap-2.5 lg:px-4 lg:text-sm",
 						view === item.id
-							? "bg-[var(--c-brand)] text-white"
+							? "bg-[var(--c-brand)] text-white shadow-[0_3px_0_var(--c-brand-shade)]"
 							: "text-[var(--c-text-muted)] hover:bg-[var(--c-muted)] hover:text-[var(--c-brand)]",
 					)}
 				>
@@ -1701,24 +1725,40 @@ function AuthLoading({
 	const [msg] = useState(() => message ?? pickRandom(brewingMessages))
 	return (
 		<main className="grid min-h-svh place-items-center bg-[var(--c-page)]">
-			<div className="flex flex-col items-center gap-4">
-				<output
-					aria-label={msg}
-					className="size-10 animate-spin rounded-full border-2 border-[var(--c-border)] border-t-[var(--c-brand)]"
-				/>
-				<p className="text-sm text-[var(--c-text-muted)]">{msg}</p>
-			</div>
+			<output aria-label={msg} className="flex flex-col items-center gap-5">
+				<span className="relative">
+					<span
+						aria-hidden="true"
+						className="absolute -top-4 left-1/2 flex -translate-x-1/2 gap-1"
+					>
+						{[0, 1, 2].map((line) => (
+							<span
+								key={line}
+								className={cx(
+									"steam-line h-3 w-[2.5px] rounded-full bg-[var(--c-brand-lt)]/60",
+									line === 1 && "stagger-2 h-4",
+									line === 2 && "stagger-3",
+								)}
+							/>
+						))}
+					</span>
+					<span className="animate-bob grid size-14 place-items-center rounded-2xl bg-[var(--c-accent-bg)] text-[var(--c-brand)]">
+						<Coffee size={26} />
+					</span>
+				</span>
+				<p className="text-sm font-semibold text-[var(--c-text-muted)]">{msg}</p>
+			</output>
 		</main>
 	);
 }
 function SignInPage({
 	signIn,
 	onGuest,
-	onLocalSignUp,
+	onLocalLogin,
 	}: {
 	signIn: () => void;
 	onGuest: () => void;
-	onLocalSignUp?: () => void;
+	onLocalLogin?: () => void;
 }) {
 	useEffect(() => {
 		const html = document.documentElement;
@@ -1741,20 +1781,39 @@ function SignInPage({
 					strokeWidth={0.7}
 				/>
 			</div>
-			<section className="relative z-10 flex w-full max-w-sm flex-col items-center rounded-3xl bg-[var(--c-brand)] px-6 py-9 text-center shadow-[0_20px_60px_rgba(77,57,38,0.2)] sm:px-8">
-				<BrandMark
-					className="size-16 rounded-[18px] bg-[var(--c-cream)] text-[var(--c-brand)]"
-					iconColor="#5a3c26"
-					iconSize={30}
-				/>
-				<h1 className="mt-7 font-serif text-5xl leading-tight">BrewBook</h1>
-				<p className="mt-4 max-w-xs text-[15px] leading-6 text-[#e7d8c4]">
-					Use your work email to continue.
+			<section className="animate-rise relative z-10 flex w-full max-w-sm flex-col items-center rounded-[2.5rem] bg-[var(--c-brand)] px-6 py-10 text-center shadow-[var(--shadow-float)] sm:px-8">
+				<div className="relative">
+					<div
+						aria-hidden="true"
+						className="absolute -top-5 left-1/2 flex -translate-x-1/2 gap-1.5"
+					>
+						{[0, 1, 2].map((line) => (
+							<span
+								key={line}
+								className={cx(
+									"steam-line h-4 w-[3px] rounded-full bg-[#e7d8c4]/70",
+									line === 1 && "stagger-2 h-5",
+									line === 2 && "stagger-3",
+								)}
+							/>
+						))}
+					</div>
+					<BrandMark
+						className="animate-bob size-20 rounded-[24px] bg-[var(--c-cream)] text-[var(--c-brand)] shadow-[0_6px_0_var(--c-cream-shade)]"
+						iconColor="#5a3c26"
+						iconSize={38}
+					/>
+				</div>
+				<h1 className="mt-8 font-serif text-5xl leading-tight tracking-tight">
+					BrewBook
+				</h1>
+				<p className="mt-3 max-w-xs text-[15px] leading-6 text-[#e7d8c4]">
+					Tea or coffee? Cast your vote for the next round.
 				</p>
 				<button
 					onClick={signIn}
 					type="button"
-					className="mt-8 flex h-12 w-full items-center justify-center gap-3 rounded-xl bg-[var(--c-cream)] text-sm font-semibold text-[var(--c-brand)] shadow-[0_12px_30px_rgba(38,24,16,0.22)] transition hover:bg-white"
+					className="btn-push mt-9 flex h-13 min-h-12 w-full items-center justify-center gap-3 rounded-2xl bg-[var(--c-cream)] text-[15px] font-bold text-[var(--c-brand)] hover:bg-white [--push-shade:var(--c-cream-shade)]"
 				>
 					<img alt="" className="size-5" src="/google-g.png" />
 					Continue with Google
@@ -1763,17 +1822,17 @@ function SignInPage({
 				<button
 					onClick={onGuest}
 					type="button"
-					className="mt-3 text-sm font-semibold text-[#e7d8c4] underline decoration-[#c9ad90] underline-offset-4"
+					className="mt-3 flex min-h-12 w-full items-center justify-center rounded-2xl border-2 border-[#e7d8c4]/30 text-sm font-bold text-[#e7d8c4] transition hover:border-[#e7d8c4]/60 hover:text-white"
 				>
 					Continue as guest
 				</button>
-				{onLocalSignUp && (
+				{onLocalLogin && (
 					<button
-						onClick={onLocalSignUp}
+						onClick={onLocalLogin}
 						type="button"
-						className="mt-2 text-xs font-semibold text-[#e7d8c4] underline decoration-[#c9ad90] underline-offset-4"
+						className="mt-4 text-xs font-semibold text-[#e7d8c4] underline decoration-[#c9ad90] underline-offset-4"
 					>
-						Sign up locally
+						Login Local
 					</button>
 				)}
 			</section>
@@ -1947,29 +2006,6 @@ function OnboardingPage({
 		</main>
 	);
 }
-function LocalSetupComplete({ onReset }: { onReset: () => void }) {
-	return (
-		<main className="grid min-h-svh place-items-center bg-[var(--c-page)] px-5 py-10 text-[var(--c-text-dark)]">
-			<section className="w-full max-w-sm rounded-3xl bg-[var(--c-card)] p-8 text-center shadow-[0_20px_60px_rgba(77,57,38,0.1)]">
-				<div className="mx-auto grid size-14 place-items-center rounded-2xl bg-[var(--c-brand)] text-[var(--c-cream)]">
-					<Check size={26} />
-				</div>
-				<h1 className="mt-6 font-serif text-3xl">Setup complete</h1>
-				<p className="mt-2 text-sm leading-6 text-[var(--c-text-muted)]">
-					The local test flow is complete. The app is not loaded in local signup
-					mode.
-				</p>
-				<button
-					onClick={onReset}
-					type="button"
-					className="mt-7 min-h-11 rounded-xl bg-[var(--c-brand)] px-4 text-sm font-semibold text-white"
-				>
-					Run setup again
-				</button>
-			</section>
-		</main>
-	);
-}
 function TodayView({
 	entry,
 	sugar,
@@ -2048,9 +2084,12 @@ function TodayView({
 				action={pianoMode ? "tap to play" : `${todayPolls.length} people`}
 			/>
 			{!guest && <AvailabilityControl availability={availability} loading={availabilityLoading} nowIST={nowIST} onChange={onUpdateAvailability} />}
-			<div className="grid gap-3">
-				{(nowIST >= 12 * 60 ? [...periodDetails].reverse() : periodDetails).map((period) => (
-					<div key={period.id} className="grid gap-0">
+			<div className="grid gap-4">
+				{(nowIST >= 12 * 60 ? [...periodDetails].reverse() : periodDetails).map((period, index) => (
+					<div
+						key={period.id}
+						className={cx("animate-rise grid gap-0", index === 1 && "stagger-2")}
+					>
 						<DrinkPoll
 							period={period}
 							closed={isPeriodClosed(period.id)}
@@ -2073,17 +2112,17 @@ function AvailabilityControl({ availability, loading, nowIST, onChange }: { avai
 	const visiblePeriods = periods.filter((period) => period === "morning" ? nowIST < 11 * 60 : nowIST < 15 * 60 + 15);
 	if (visiblePeriods.length === 0) return null;
 	return (
-		<details className="group rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] px-4 py-3 shadow-[0_8px_30px_rgba(77,57,38,0.03)]">
-			<summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-[var(--c-text-mid)]">
-				<span className="flex items-center gap-2.5"><CalendarOff size={17} className="text-[var(--c-brand-lt)]" />Mark your absence</span>
-				<ChevronDown size={17} className="text-[var(--c-text-muted)] transition-transform group-open:rotate-180" />
+		<details className="animate-rise group rounded-3xl border border-[var(--c-border)] bg-[var(--c-card)] px-4 py-3.5 shadow-[var(--shadow-soft)]">
+			<summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-[var(--c-text-mid)]">
+				<span className="flex items-center gap-3"><span className="grid size-8 place-items-center rounded-xl bg-[var(--c-muted)] text-[var(--c-brand-lt)]"><CalendarOff size={16} /></span>Mark your absence</span>
+				<ChevronDown size={17} className="text-[var(--c-text-muted)] transition-transform duration-200 group-open:rotate-180" />
 			</summary>
 			<div className="mt-3 grid gap-3 border-t border-[var(--c-border-2)] pt-3 sm:grid-cols-2">
 				{visiblePeriods.map((period) => (
-					<label key={period} className="grid gap-1.5 text-xs font-semibold text-[var(--c-text-muted)]">
+					<label key={period} className="grid gap-1.5 text-xs font-bold text-[var(--c-text-muted)]">
 						<span>{period === "morning" ? "Morning" : "Evening"}</span>
 						<select
-							className="h-10 rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-2 text-sm font-semibold text-[var(--c-text-mid)]"
+							className="h-11 rounded-xl border-2 border-[var(--c-border)] bg-[var(--c-card)] px-2 text-sm font-semibold text-[var(--c-text-mid)] transition-colors focus:border-[var(--c-brand-lt)]"
 							disabled={loading !== null}
 							value={availability[period]}
 							onChange={(event) => onChange?.(period, event.target.value as AttendanceStatus)}
@@ -2523,7 +2562,7 @@ function PageHeader({
 	return (
 		<div className="flex items-end justify-between gap-4 border-b border-[var(--c-border)] pb-4">
 			<div>
-				<p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--c-brand-lt)]">
+				<p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--c-brand-lt)]">
 					{eyebrow}
 				</p>
 				<h1 className="mt-1 font-serif text-3xl tracking-[-0.03em] text-[var(--c-text-dark)] sm:text-4xl">
@@ -2531,7 +2570,7 @@ function PageHeader({
 				</h1>
 			</div>
 			{action && (
-				<span className="shrink-0 text-xs font-semibold text-[var(--c-text-dim)]">
+				<span className="mb-1 shrink-0 rounded-full bg-[var(--c-accent-bg)] px-3 py-1.5 text-xs font-bold text-[var(--c-text-mid)]">
 					{action}
 				</span>
 			)}
@@ -2578,13 +2617,13 @@ function SugarToggle({
 			</span>
 			<span
 				className={cx(
-					"relative h-6 w-11 rounded-full transition",
+					"relative h-7 w-12 rounded-full transition-colors duration-200",
 					sugar ? "bg-[var(--c-toggle-off)]" : "bg-[var(--c-brand-lt)]",
 				)}
 			>
 				<span
 					className={cx(
-						"absolute top-1 size-4 rounded-full bg-white transition",
+						"absolute top-1 size-5 rounded-full bg-white shadow-sm transition-all duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
 						sugar ? "left-1" : "left-6",
 					)}
 				/>
@@ -2619,17 +2658,24 @@ function DrinkPoll({
 	const total = activePolls.length;
 	const [infoDrink, setInfoDrink] = useState<Drink | null>(null);
 	return (
-		<div className="overflow-hidden rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] shadow-[0_8px_30px_rgba(77,57,38,0.04)]">
-			<div className="flex items-center justify-between gap-4 border-b border-[var(--c-border-2)] px-4 py-3.5 sm:px-5">
-				<span className="flex items-center gap-2.5">
-					<span className="grid size-8 place-items-center rounded-lg bg-[var(--c-muted)] text-[var(--c-brand-lt)]">
-						<Coffee size={16} />
+		<div className="overflow-hidden rounded-3xl border border-[var(--c-border)] bg-[var(--c-card)] shadow-[var(--shadow-soft)]">
+			<div className="flex items-center justify-between gap-4 border-b border-[var(--c-border-2)] px-4 py-4 sm:px-5">
+				<span className="flex items-center gap-3">
+					<span
+						className={cx(
+							"grid size-10 place-items-center rounded-2xl",
+							period.id === "morning"
+								? "bg-[var(--c-accent-bg)] text-[var(--c-brand-lt)]"
+								: "bg-[var(--c-muted)] text-[var(--c-text-mid)]",
+						)}
+					>
+						{period.id === "morning" ? <Sun size={19} /> : <Moon size={18} />}
 					</span>
 					<span>
-						<span className="block text-sm font-semibold text-[var(--c-text-dark)]">
+						<span className="block text-[15px] font-bold text-[var(--c-text-dark)]">
 							{period.label}
 						</span>
-						<span className="block text-xs text-[var(--c-text-dim)]">
+						<span className="block text-xs font-medium text-[var(--c-text-dim)]">
 							{total} {total === 1 ? "response" : "responses"}{unavailableCount ? ` · ${unavailableCount} away` : ""}
 						</span>
 					</span>
@@ -2642,7 +2688,7 @@ function DrinkPoll({
 				/>
 			</div>
 			{closed && (
-				<div className="flex items-center gap-2 border-b border-[var(--c-border-2)] bg-[var(--c-muted)] px-4 py-2.5 text-xs font-semibold text-[var(--c-text-muted)] sm:px-5">
+				<div className="flex items-center gap-2 border-b border-[var(--c-border-2)] bg-[var(--c-muted)] px-4 py-2.5 text-xs font-bold text-[var(--c-text-muted)] sm:px-5">
 					<span className="size-1.5 rounded-full bg-[var(--c-brand-lt)]" />
 					Poll closed
 				</div>
@@ -2652,15 +2698,15 @@ function DrinkPoll({
 					const count = counts[drink];
 					const percent = total ? Math.round((counts[drink] / total) * 100) : 0;
 					return (
-						<div key={drink} className="flex items-center gap-1">
+						<div key={drink} className="flex items-center gap-1.5">
 							<button
 								disabled={!editable}
 								onClick={() => onSelect?.(drink)}
 								type="button"
 								className={cx(
-									"relative flex min-h-11 flex-1 items-center justify-between overflow-hidden rounded-xl border px-3.5 text-left text-sm font-semibold",
+									"relative flex min-h-12 flex-1 items-center justify-between overflow-hidden rounded-2xl border-2 px-3.5 text-left text-sm font-semibold",
 									editable
-										? "transition hover:border-[var(--c-border-3)]"
+										? "transition-colors hover:border-[var(--c-border-3)]"
 										: "cursor-default",
 									selected === drink
 										? "border-[var(--c-brand-lt)] bg-[var(--c-accent-bg)] text-[var(--c-text-mid)]"
@@ -2668,7 +2714,7 @@ function DrinkPoll({
 								)}
 							>
 								<span
-									className="absolute inset-y-0 left-0 bg-[var(--c-accent-bg)] transition-all"
+									className="absolute inset-y-0 left-0 bg-[var(--c-accent-bg)] transition-all duration-500"
 									style={{
 										width: editable
 											? selected === drink
@@ -2677,11 +2723,18 @@ function DrinkPoll({
 											: `${percent}%`,
 									}}
 								/>
-								<span className="relative">{drink}</span>
-								<span className="relative flex items-center gap-2 text-xs text-[var(--c-text-muted)]">
+								<span className="relative flex items-center gap-2.5">
+									<span
+										aria-hidden="true"
+										className="size-2.5 shrink-0 rounded-full"
+										style={{ background: drinkColors[drink] ?? "var(--c-brand-lt)" }}
+									/>
+									{drink}
+								</span>
+								<span className="relative flex items-center gap-2 text-xs font-bold text-[var(--c-text-muted)]">
 									{count}
 									{selected === drink && (
-										<span className="grid size-5 place-items-center rounded-full bg-[var(--c-brand-lt)] text-white">
+										<span className="animate-pop grid size-5 place-items-center rounded-full bg-[var(--c-brand-lt)] text-white">
 											<Check size={13} strokeWidth={3} />
 										</span>
 									)}
@@ -2690,7 +2743,7 @@ function DrinkPoll({
 							<button
 								type="button"
 								onClick={() => setInfoDrink(drink)}
-								className="grid size-7 shrink-0 place-items-center rounded-lg text-[var(--c-text-dim)] opacity-60 transition hover:bg-[var(--c-muted)] hover:opacity-100"
+								className="grid size-8 shrink-0 place-items-center rounded-full text-[var(--c-text-dim)] opacity-60 transition hover:bg-[var(--c-muted)] hover:opacity-100"
 								aria-label={`Info about ${drink}`}
 							>
 								<Info size={14} />
@@ -2701,7 +2754,7 @@ function DrinkPoll({
 			</div>
 			{onOpen && (
 				<button
-					className="mx-3 mb-3 flex min-h-11 w-[calc(100%-1.5rem)] items-center justify-center gap-2 rounded-xl bg-[var(--c-brand)] text-sm font-semibold text-white transition hover:bg-[var(--c-text-mid)] sm:mx-4 sm:mb-4 sm:w-[calc(100%-2rem)]"
+					className="btn-push mx-3 mb-4 flex min-h-12 w-[calc(100%-1.5rem)] items-center justify-center gap-2 rounded-2xl bg-[var(--c-brand)] text-sm font-bold text-white hover:bg-[var(--c-brand-h)] sm:mx-4 sm:w-[calc(100%-2rem)]"
 					onClick={onOpen}
 					type="button"
 				>
@@ -2931,9 +2984,9 @@ function DrinkInfoSheet({ drink, onClose }: { drink: Drink; onClose: () => void 
 	if (!info) return null;
 	return (
 		<div className="fixed inset-0 z-40 flex items-end overscroll-none bg-[var(--c-text)]/10 p-0 sm:items-center sm:justify-center sm:p-4">
-			<button className="absolute inset-0 cursor-default bg-[var(--c-text)]/30 [touch-action:none]" onClick={onClose} type="button" aria-label="Close" />
+			<button className="animate-fade-in absolute inset-0 cursor-default bg-[var(--c-text)]/30 [touch-action:none]" onClick={onClose} type="button" aria-label="Close" />
 			<section
-				className="no-scrollbar relative z-10 flex h-[88svh] w-full flex-col overflow-y-auto rounded-t-3xl bg-[var(--c-card)] overscroll-contain shadow-2xl sm:h-auto sm:max-h-[88svh] sm:max-w-lg sm:rounded-2xl"
+				className="no-scrollbar animate-sheet-up relative z-10 flex h-[88svh] w-full flex-col overflow-y-auto rounded-t-[2rem] bg-[var(--c-card)] overscroll-contain shadow-[var(--shadow-float)] sm:h-auto sm:max-h-[88svh] sm:max-w-lg sm:rounded-3xl"
 				style={{ transform: dragY > 0 ? `translateY(${dragY}px)` : undefined, transition: dragY === 0 ? "transform 0.25s ease" : "none" }}
 				onTouchStart={handleTouchStart}
 				onTouchMove={handleTouchMove}
@@ -3035,13 +3088,13 @@ function PollDetailsSheet({
 	return (
 		<div className="fixed inset-0 z-30 flex items-end overscroll-none bg-[var(--c-text)]/10 p-0 sm:items-center sm:justify-center sm:p-4">
 			<button
-				className="absolute inset-0 cursor-default bg-[var(--c-text)]/30 [touch-action:none]"
+				className="animate-fade-in absolute inset-0 cursor-default bg-[var(--c-text)]/30 [touch-action:none]"
 				onClick={onClose}
 				type="button"
 				aria-label="Close poll details"
 			/>
 			<section
-				className="relative z-10 flex h-[88svh] min-h-0 w-full flex-col rounded-t-3xl bg-[var(--c-card)] px-4 pb-6 pt-3 shadow-2xl overscroll-contain sm:h-auto sm:max-h-[88svh] sm:max-w-lg sm:rounded-2xl sm:p-6"
+				className="animate-sheet-up relative z-10 flex h-[88svh] min-h-0 w-full flex-col rounded-t-[2rem] bg-[var(--c-card)] px-4 pb-6 pt-3 shadow-[var(--shadow-float)] overscroll-contain sm:h-auto sm:max-h-[88svh] sm:max-w-lg sm:rounded-3xl sm:p-6"
 				style={{ transform: dragY > 0 ? `translateY(${dragY}px)` : undefined, transition: dragY === 0 ? "transform 0.25s ease" : "none" }}
 				onTouchStart={handleTouchStart}
 				onTouchMove={handleTouchMove}

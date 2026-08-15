@@ -3,8 +3,8 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { db } from '#/db'
 import { attendance, company, companyAdmin, drinkDefault, drinkResponse, user } from '#/db/schema'
-import { auth } from '#/lib/auth'
 import { drinks, periods, type AttendanceStatus, type Company, type Drink, type DrinkChoice, type Period, type SugarChoice } from '#/lib/drinks'
+import { getRequestUser } from '#/lib/request-user'
 
 function json(data: unknown, init?: ResponseInit) {
   return Response.json(data, init)
@@ -37,8 +37,7 @@ function defaultsFromRows(rows: Array<{ period: 'morning' | 'evening'; drink: Dr
 }
 
 async function getCurrentUser(request: Request) {
-  const session = await auth.api.getSession({ headers: request.headers })
-  return session?.user ?? null
+  return getRequestUser(request)
 }
 
 /**

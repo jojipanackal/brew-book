@@ -1,6 +1,46 @@
 # BrewBook Database Setup
 
-This guide connects BrewBook to PostgreSQL and enables Google Workspace login. PostgreSQL may run in a VPS container or on a managed provider. The project uses TanStack Start for the server runtime, Better Auth for sessions, and Drizzle ORM for database access.
+This guide connects BrewBook to PostgreSQL and enables Google Workspace login. PostgreSQL may run locally, in a VPS container, or on a managed provider. The project uses TanStack Start for the server runtime, Better Auth for sessions, and Drizzle ORM for database access.
+
+## Quick local setup
+
+The local Compose file runs an isolated PostgreSQL 17 container on `127.0.0.1:5433`. Its database and credentials are intentionally development-only, and the local scripts always pass this URL explicitly so they do not use the VPS URL from `.env.local`.
+
+Start PostgreSQL, apply every committed migration, and insert fake data:
+
+```bash
+pnpm db:local:setup
+```
+
+Run the app against that database:
+
+```bash
+pnpm dev:local
+```
+
+The seed is safe to rerun and creates a demo company, five users, two weeks of drink and attendance history, and a pending guest. Open the local app and select **Login Local** to sign in as the seeded `Asha Admin` user without Google or Better Auth. This option is enabled only by `pnpm dev:local` and the server additionally rejects it unless the database is `brewbook_local` on localhost.
+
+Useful local database commands:
+
+```bash
+pnpm db:local:psql       # Open psql inside the container
+pnpm db:local:migrate    # Apply pending migrations only
+pnpm db:local:seed       # Add any missing fake data
+pnpm db:local:down       # Stop the container; keep its data
+```
+
+The persistent volume is named under the `brew-book-local` Compose project. If you intentionally want a completely empty local database, remove the stack and its volume with `docker compose -f compose.local.yml down -v`, then run `pnpm db:local:setup` again.
+
+Local connection details:
+
+```text
+Host: 127.0.0.1
+Port: 5433
+Database: brewbook_local
+User: brewbook
+Password: brewbook
+URL: postgresql://brewbook:brewbook@127.0.0.1:5433/brewbook_local
+```
 
 ## 1. Create a PostgreSQL database
 

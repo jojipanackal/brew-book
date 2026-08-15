@@ -38,6 +38,12 @@
   --c-drag:       #ddd3c7;
   --c-empty:      #dbcfc1;
 
+  /* playful elevation */
+  --c-brand-shade:  #43301f;
+  --c-cream-shade:  #e3d3ba;
+  --shadow-soft:    0 1px 2px rgba(77, 57, 38, 0.05), 0 10px 30px rgba(77, 57, 38, 0.07);
+  --shadow-float:   0 6px 16px rgba(38, 24, 16, 0.1), 0 20px 48px rgba(38, 24, 16, 0.12);
+
   color: var(--c-text);
   background: var(--c-page);
   font-family:
@@ -82,6 +88,11 @@ html.dark {
   --c-toggle-off: #38383e;
   --c-drag:       #3a3a42;
   --c-empty:      #2e2e36;
+
+  --c-brand-shade:  #6b4227;
+  --c-cream-shade:  #0e0d0b;
+  --shadow-soft:    0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.28);
+  --shadow-float:   0 6px 16px rgba(0, 0, 0, 0.38), 0 20px 48px rgba(0, 0, 0, 0.45);
 }
 
 .font-serif {
@@ -122,6 +133,115 @@ button,
 input,
 select {
   font: inherit;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--c-brand-lt);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Chunky playful push-button: solid face sitting on a darker "edge" */
+.btn-push {
+  --push-shade: var(--c-brand-shade);
+  --push-depth: 4px;
+  box-shadow: 0 var(--push-depth) 0 var(--push-shade);
+  transition:
+    transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.12s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color 0.15s ease;
+  will-change: transform;
+}
+
+.btn-push:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--push-shade);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button:active:not(:disabled):not(.btn-push):not(.press-none) {
+    transform: scale(0.96);
+  }
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes pop-in {
+  0%   { opacity: 0; transform: scale(0.4); }
+  65%  { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes sheet-up {
+  from { opacity: 0; transform: translateY(48px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes steam-rise {
+  0%   { opacity: 0; transform: translateY(5px) scaleY(0.6); }
+  35%  { opacity: 0.8; }
+  100% { opacity: 0; transform: translateY(-12px) scaleY(1.2); }
+}
+
+@keyframes bob {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50%      { transform: translateY(-6px) rotate(3deg); }
+}
+
+.animate-rise {
+  animation: rise-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-pop {
+  animation: pop-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.animate-sheet-up {
+  animation: sheet-up 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.animate-fade-in {
+  animation: fade-in 0.25s ease both;
+}
+
+.animate-bob {
+  animation: bob 3.2s ease-in-out infinite;
+}
+
+.steam-line {
+  animation: steam-rise 2.4s ease-in-out infinite;
+}
+
+.stagger-1 { animation-delay: 0.04s; }
+.stagger-2 { animation-delay: 0.08s; }
+.stagger-3 { animation-delay: 0.12s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise,
+  .animate-pop,
+  .animate-sheet-up,
+  .animate-fade-in,
+  .animate-bob,
+  .steam-line {
+    animation: none;
+  }
 }
 
 .no-scrollbar {

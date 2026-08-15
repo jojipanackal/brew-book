@@ -3,8 +3,8 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { db } from '#/db'
 import { company, companyAdmin, drinkResponse, user } from '#/db/schema'
-import { auth } from '#/lib/auth'
 import { drinks, periods, type Drink, type Period } from '#/lib/drinks'
+import { getRequestUser } from '#/lib/request-user'
 import { ensureTodayResponses, readDay } from './drinks'
 
 const indiaDateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' })
@@ -18,16 +18,16 @@ function isPeriod(value: unknown): value is Period { return typeof value === 'st
 function isDrink(value: unknown): value is Drink { return typeof value === 'string' && drinks.includes(value as Drink) }
 
 async function getAdmin(request: Request) {
-  const session = await auth.api.getSession({ headers: request.headers })
-  if (!session?.user) return null
-  const normalizedEmail = session.user.email.trim().toLowerCase()
+  const currentUser = await getRequestUser(request)
+  if (!currentUser) return null
+  const normalizedEmail = currentUser.email.trim().toLowerCase()
   const [userRow, memberships] = await Promise.all([
-    db.select({ id: user.id, role: user.role, companyId: user.companyId }).from(user).where(eq(user.id, session.user.id)).limit(1),
+    db.select({ id: user.id, role: user.role, companyId: user.companyId }).from(user).where(eq(user.id, currentUser.id)).limit(1),
     db.select({ companyId: companyAdmin.companyId }).from(companyAdmin).where(eq(companyAdmin.email, normalizedEmail)),
   ])
-  if (userRow[0]?.role === 'admin') return { userId: session.user.id, companyIds: null as string[] | null }
+  if (userRow[0]?.role === 'admin') return { userId: currentUser.id, companyIds: null as string[] | null }
   if (!memberships.length) return null
-  return { userId: session.user.id, companyIds: memberships.map((item) => item.companyId) }
+  return { userId: currentUser.id, companyIds: memberships.map((item) => item.companyId) }
 }
 
 async function canManage(admin: { companyIds: string[] | null }, targetId: string) {

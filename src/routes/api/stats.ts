@@ -3,8 +3,8 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { db } from '#/db'
 import { drinkResponse, user } from '#/db/schema'
-import { auth } from '#/lib/auth'
 import { drinks, type Drink } from '#/lib/drinks'
+import { getRequestUser } from '#/lib/request-user'
 
 const indiaDateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' })
 const todayKey = () => indiaDateFormatter.format(new Date())
@@ -20,8 +20,8 @@ function dateOffset(days: number) {
 }
 
 async function getCurrentUserId(request: Request) {
-  const session = await auth.api.getSession({ headers: request.headers })
-  return session?.user?.id ?? null
+  const currentUser = await getRequestUser(request)
+  return currentUser?.id ?? null
 }
 
 export type StatsResponse = {

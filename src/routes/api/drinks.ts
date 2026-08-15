@@ -3,8 +3,8 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { db } from '#/db'
 import { attendance, drinkDefault, drinkResponse, user } from '#/db/schema'
-import { auth } from '#/lib/auth'
 import { drinks, periods, type AttendanceStatus, type Drink, type DrinkChoice, type Period, type PollSource, type SugarChoice } from '#/lib/drinks'
+import { getRequestUser } from '#/lib/request-user'
 
 const indiaDateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' })
 const todayKey = () => indiaDateFormatter.format(new Date())
@@ -26,10 +26,10 @@ function isDate(value: unknown): value is string {
 }
 
 async function getCurrentUser(request: Request) {
-  const session = await auth.api.getSession({ headers: request.headers })
-  if (session?.user) {
-    const member = await db.select({ companyId: user.companyId }).from(user).where(eq(user.id, session.user.id)).limit(1)
-    if (member[0]?.companyId) return session.user
+  const currentUser = await getRequestUser(request)
+  if (currentUser) {
+    const member = await db.select({ companyId: user.companyId }).from(user).where(eq(user.id, currentUser.id)).limit(1)
+    if (member[0]?.companyId) return currentUser
     return null
   }
   const token = request.headers.get('cookie')?.match(/(?:^|;\s*)brewbook_guest=([^;]+)/)?.[1]
