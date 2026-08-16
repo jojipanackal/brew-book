@@ -36,6 +36,24 @@ For production, use the deployed app URL with the same `/api/auth/callback/googl
 
 The Drizzle schema includes Better Auth tables plus BrewBook drink defaults and responses.
 
+### Local development
+
+Docker is the recommended way for contributors to run PostgreSQL locally. Start the database from the repository root:
+
+```bash
+pnpm db:local:up
+pnpm db:migrate
+pnpm dev
+```
+
+The local database is available at `127.0.0.1:5432` and persists in the Docker volume `brew-book-postgres-data`. Stop it with:
+
+```bash
+pnpm db:local:down
+```
+
+To remove the local database and all its data, use `docker compose -f docker-compose.local.yml down -v`. Do not point local development at the production database.
+
 ```bash
 pnpm db:generate
 pnpm db:migrate

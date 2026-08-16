@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: brew-book-postgres-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: brewadmin
+      POSTGRES_PASSWORD: localpassword
+      POSTGRES_DB: brewdb
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - brew-book-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U brewadmin -d brewdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  brew-book-postgres-data:

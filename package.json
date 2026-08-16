@@ -21,6 +21,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:push": "drizzle-kit push",
+    "db:local:up": "docker compose -f docker-compose.local.yml up -d",
+    "db:local:down": "docker compose -f docker-compose.local.yml down",
     "db:pull": "drizzle-kit pull",
     "db:studio": "drizzle-kit studio",
     "push:generate-vapid": "tsx scripts/generate-vapid.ts",
