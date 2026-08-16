@@ -1461,6 +1461,22 @@ function EditCookModal({
 	const [error, setError] = useState("");
 	const [saving, setSaving] = useState(false);
 
+	const handleDelete = () => {
+		if (!window.confirm(`Remove ${cook.name}? This cannot be undone.`)) return;
+
+		setError("");
+		setSaving(true);
+		void deleteCook(cook.id)
+			.then(() => {
+				onRefresh();
+				onClose();
+			})
+			.catch((err) => {
+				setError(err instanceof Error ? err.message : "Failed to remove cook");
+				setSaving(false);
+			});
+	};
+
 	const handleSubmit = () => {
 		setError("");
 		if (!name.trim()) {
@@ -1547,6 +1563,14 @@ function EditCookModal({
 				</div>
 
 				<div className="mt-6 flex gap-3">
+					<button
+						onClick={handleDelete}
+						type="button"
+						disabled={saving}
+						className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+					>
+						Remove
+					</button>
 					<button
 						onClick={onClose}
 						type="button"
@@ -3728,4 +3752,3 @@ function PollDetailsSheet({
 }
 
 export default App;
-
