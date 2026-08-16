@@ -139,3 +139,17 @@ export const attendance = pgTable(
   },
   (table) => [unique().on(table.userId, table.date, table.period), index('attendance_date_idx').on(table.date)],
 )
+
+export const cook = pgTable(
+  'cook',
+  {
+    id: text('id').primaryKey(),
+    companyId: text('company_id').notNull().references(() => company.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    phoneNumber: text('phone_number').notNull(),
+    isActive: boolean('is_active').notNull().default(true),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [index('cook_company_id_idx').on(table.companyId)],
+)

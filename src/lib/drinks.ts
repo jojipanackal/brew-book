@@ -117,3 +117,83 @@ export function updateGuestRequest(input: { type: 'approve' | 'reject' | 'remove
 export function updateUserResponse(input: { userId: string; period: Period; drink: Drink; sugar: boolean }) {
   return request<{ ok: true }>('/api/admin', { method: 'POST', body: JSON.stringify({ type: 'response', date: new Date().toISOString().slice(0, 10), ...input }) })
 }
+
+export type Cook = { id: string; name: string; phoneNumber: string; isActive: boolean; createdAt: Date; updatedAt: Date }
+
+export type PollResults = {
+  period: Period
+  date: string
+  results: Record<Drink, number>
+  total: number
+}
+
+export function calculatePollResults(responses: PollRecord[], period: Period): PollResults {
+  const results: Record<Drink, number> = {}
+  
+  // Initialize all drinks with 0
+  for (const drink of drinks) {
+    results[drink] = 0
+  }
+  
+  // Count votes
+  for (const response of responses) {
+    const drinkChoice = response.choices[period]
+    if (response.availability[period] === 'office') {
+      results[drinkChoice] = (results[drinkChoice] || 0) + 1
+    }
+  }
+  
+  // Don't count "No drink" in total
+  const total = Object.entries(results)
+    .filter(([drink]) => drink !== 'No drink')
+    .reduce((sum, [, count]) => sum + count, 0)
+  
+  return {
+    period,
+    date: new Date().toISOString().split('T')[0],
+    results,
+    total,
+  }
+}
+
+export function formatPollResultsMessage(results: PollResults, date: string): string {
+  const periodLabel = results.period === 'morning' ? 'Morning Tea' : 'Evening Tea'
+  const lines = [
+    `BrewBook - ${periodLabel} Requirement`,
+    `Date: ${new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`,
+    '',
+  ]
+  
+  // Add drink counts
+  for (const [drink, count] of Object.entries(results.results)) {
+    if (drink !== 'No drink' && count > 0) {
+      lines.push(`${drink}: ${count}`)
+    }
+  }
+  
+  // Add total
+  lines.push(`Total: ${results.total}`)
+  
+  return lines.join('\n')
+}
+
+export function generateWhatsAppUrl(phoneNumber: string, message: string): string {
+  const encodedMessage = encodeURIComponent(message)
+  return `https://wa.me/${phoneNumber}?text=${encodedMessage}`
+}
+
+export function getCooks() {
+  return request<{ cooks: Cook[] }>('/api/cooks')
+}
+
+export function createCook(input: { name: string; phoneNumber: string }) {
+  return request<{ ok: true; cook: Cook }>('/api/cooks', { method: 'POST', body: JSON.stringify({ type: 'create', ...input }) })
+}
+
+export function updateCook(input: { id: string; name?: string; phoneNumber?: string; isActive?: boolean }) {
+  return request<{ ok: true; cook: Cook }>('/api/cooks', { method: 'POST', body: JSON.stringify({ type: 'update', ...input }) })
+}
+
+export function deleteCook(cookId: string) {
+  return request<{ ok: true }>('/api/cooks', { method: 'POST', body: JSON.stringify({ type: 'delete', id: cookId }) })
+}
