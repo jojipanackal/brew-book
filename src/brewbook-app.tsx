@@ -27,16 +27,22 @@ import { authClient } from "#/lib/auth-client";
 import {
 	type AdminDashboard,
 	type AttendanceStatus,
+	calculatePollResults,
 	type Company,
 	type CompanyRecord,
 	completeOnboarding,
+	createCook,
 	createGuest,
+	deleteCook,
 	type Drink,
 	type DrinkChoice,
 	drinks,
+	formatPollResultsMessage,
+	generateWhatsAppUrl,
 	type GuestSession,
 	getAdminDashboard,
 	getCompanies,
+	getCooks,
 	getDrinkDay,
 	getGuestSession,
 	getProfile,
@@ -45,14 +51,17 @@ import {
 	leaveGuest,
 	type Period,
 	type PollRecord,
+	type PollResults,
 	type PollSource,
 	periods,
 	type SugarChoice,
 	saveDefault,
 	saveResponse,
 	type User,
+	updateCook,
 	updateGuestRequest,
 	updateUserResponse,
+	type Cook,
 } from "#/lib/drinks";
 import {
 	captureSentryException,
@@ -1185,6 +1194,496 @@ function GuestSetupPage({
 		</main>
 	);
 }
+
+function AdminResultsView({
+	data,
+	cooks,
+	onSendToCook,
+}: {
+	data: AdminDashboard;
+	cooks: Cook[];
+	onSendToCook: (period: Period, results: PollResults) => void;
+}) {
+	return (
+		<div className="grid gap-4">
+			{periods.map((period) => {
+				const results = calculatePollResults(data.responses, period);
+				const hasDrinks = Object.values(results.results).some((count) => count > 0);
+
+				return (
+					<section key={period} className="rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] p-4">
+						<div className="flex items-center justify-between gap-3">
+							<div>
+								<h2 className="text-sm font-semibold text-[var(--c-text-dark)]">
+									{period === "morning" ? "Morning" : "Evening"} Results
+								</h2>
+								<p className="mt-1 text-xs text-[var(--c-text-muted)]">
+									{results.total === 0 ? "No responses yet" : `Total: ${results.total}`}
+								</p>
+							</div>
+							{hasDrinks && cooks.length > 0 && (
+								<button
+									onClick={() => onSendToCook(period, results)}
+									type="button"
+									className="shrink-0 rounded-lg bg-[var(--c-brand)] px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
+								>
+									Send to Cook
+								</button>
+							)}
+						</div>
+
+						{hasDrinks ? (
+							<div className="mt-3 space-y-2">
+								{Object.entries(results.results)
+									.filter(([drink]) => drink !== "No drink")
+									.map(([drink, count]) => (
+										count > 0 && (
+											<div key={drink} className="flex items-center justify-between rounded-lg bg-[var(--c-row)] px-3 py-2">
+												<span className="text-sm text-[var(--c-text-mid)]">{drink}</span>
+												<span className="font-semibold text-[var(--c-brand)]">{count}</span>
+											</div>
+										)
+									))}
+							</div>
+						) : (
+							<p className="mt-3 text-xs text-[var(--c-text-muted)]">
+								No responses have been recorded for this poll.
+							</p>
+						)}
+					</section>
+				);
+			})}
+		</div>
+	);
+}
+
+function AdminCooksView({
+	cooks,
+	loading,
+	editingCook,
+	showAddCook,
+	onRefresh,
+	onEdit,
+	onShowAdd,
+	onCloseAdd,
+	onCloseEdit,
+}: {
+	cooks: Cook[];
+	loading: boolean;
+	editingCook: Cook | null;
+	showAddCook: boolean;
+	onRefresh: () => void;
+	onEdit: (cook: Cook) => void;
+	onShowAdd: () => void;
+	onCloseAdd: () => void;
+	onCloseEdit: () => void;
+}) {
+	return (
+		<div className="grid gap-4">
+			<section className="rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] p-4">
+				<div className="flex items-center justify-between gap-3">
+					<h2 className="text-sm font-semibold text-[var(--c-text-dark)]">Cooks</h2>
+					<button
+						onClick={onShowAdd}
+						type="button"
+						className="rounded-lg bg-[var(--c-brand)] px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
+					>
+						+ Add Cook
+					</button>
+				</div>
+
+				{loading ? (
+					<div className="mt-4 text-center text-xs text-[var(--c-text-muted)]">
+						Loading cooks...
+					</div>
+				) : cooks.length === 0 ? (
+					<div className="mt-4 text-center text-xs text-[var(--c-text-muted)]">
+						No cooks added yet
+					</div>
+				) : (
+					<div className="mt-3 space-y-2">
+						{cooks.map((cook) => (
+							<div
+								key={cook.id}
+								className={cx(
+									"rounded-lg px-3 py-3",
+									cook.isActive
+										? "bg-[var(--c-row)]"
+										: "bg-[var(--c-muted)] opacity-60",
+								)}
+							>
+								<div className="flex items-center justify-between gap-3">
+									<div className="min-w-0">
+										<p className="truncate text-sm font-semibold">{cook.name}</p>
+										<p className="mt-1 truncate text-xs text-[var(--c-text-muted)]">
+											+{cook.phoneNumber}
+										</p>
+									</div>
+									<div className="flex shrink-0 gap-2">
+										<button
+											onClick={() => onEdit(cook)}
+											type="button"
+											className="rounded-lg border border-[var(--c-border)] px-3 py-2 text-xs font-semibold text-[var(--c-text-mid)] hover:bg-[var(--c-card)]"
+										>
+											Edit
+										</button>
+									</div>
+								</div>
+							</div>
+						))}
+					</div>
+				)}
+			</section>
+
+			{showAddCook && (
+				<AddCookModal onClose={onCloseAdd} onRefresh={onRefresh} />
+			)}
+
+			{editingCook && (
+				<EditCookModal cook={editingCook} onClose={onCloseEdit} onRefresh={onRefresh} />
+			)}
+		</div>
+	);
+}
+
+function AddCookModal({
+	onClose,
+	onRefresh,
+}: {
+	onClose: () => void;
+	onRefresh: () => void;
+}) {
+	const [name, setName] = useState("");
+	const [phone, setPhone] = useState("");
+	const [error, setError] = useState("");
+	const [saving, setSaving] = useState(false);
+
+	const handleSubmit = () => {
+		setError("");
+		if (!name.trim()) {
+			setError("Name is required");
+			return;
+		}
+		if (!phone.trim()) {
+			setError("Phone number is required");
+			return;
+		}
+
+		setSaving(true);
+		void createCook({ name: name.trim(), phoneNumber: phone.trim() })
+			.then(() => {
+				onRefresh();
+				onClose();
+			})
+			.catch((err) => {
+				setError(err instanceof Error ? err.message : "Failed to create cook");
+				setSaving(false);
+			});
+	};
+
+	return (
+		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+			<div className="w-full max-w-md rounded-2xl bg-[var(--c-card)] p-6">
+				<h2 className="text-lg font-semibold text-[var(--c-text-dark)]">Add Cook</h2>
+
+				<div className="mt-4 space-y-3">
+					<div>
+						<label className="block text-xs font-semibold text-[var(--c-text-mid)]">
+							Name
+						</label>
+						<input
+							type="text"
+							value={name}
+							onChange={(e) => setName(e.target.value)}
+							placeholder="Cook name"
+							className="mt-1 h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-3 text-sm text-[var(--c-text-dark)]"
+						/>
+					</div>
+
+					<div>
+						<label className="block text-xs font-semibold text-[var(--c-text-mid)]">
+							Phone Number
+						</label>
+						<input
+							type="text"
+							value={phone}
+							onChange={(e) => setPhone(e.target.value)}
+							placeholder="+91 98765 43210"
+							className="mt-1 h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-3 text-sm text-[var(--c-text-dark)]"
+						/>
+						<p className="mt-1 text-xs text-[var(--c-text-muted)]">
+							Include country code (e.g., +91 for India)
+						</p>
+					</div>
+
+					{error && (
+						<div className="rounded-lg bg-red-50 p-3 text-xs text-red-700">
+							{error}
+						</div>
+					)}
+				</div>
+
+				<div className="mt-6 flex gap-3">
+					<button
+						onClick={onClose}
+						type="button"
+						disabled={saving}
+						className="flex-1 rounded-lg border border-[var(--c-border)] px-3 py-2 text-sm font-semibold text-[var(--c-text-mid)] hover:bg-[var(--c-muted)]"
+					>
+						Cancel
+					</button>
+					<button
+						onClick={handleSubmit}
+						type="button"
+						disabled={saving}
+						className="flex-1 rounded-lg bg-[var(--c-brand)] px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+					>
+						{saving ? "Saving..." : "Add"}
+					</button>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function EditCookModal({
+	cook,
+	onClose,
+	onRefresh,
+}: {
+	cook: Cook;
+	onClose: () => void;
+	onRefresh: () => void;
+}) {
+	const [name, setName] = useState(cook.name);
+	const [phone, setPhone] = useState(cook.phoneNumber);
+	const [isActive, setIsActive] = useState(cook.isActive);
+	const [error, setError] = useState("");
+	const [saving, setSaving] = useState(false);
+
+	const handleSubmit = () => {
+		setError("");
+		if (!name.trim()) {
+			setError("Name is required");
+			return;
+		}
+		if (!phone.trim()) {
+			setError("Phone number is required");
+			return;
+		}
+
+		const updates: {
+			id: string;
+			name?: string;
+			phoneNumber?: string;
+			isActive?: boolean;
+		} = { id: cook.id };
+
+		if (name !== cook.name) updates.name = name.trim();
+		if (phone !== cook.phoneNumber) updates.phoneNumber = phone.trim();
+		if (isActive !== cook.isActive) updates.isActive = isActive;
+
+		setSaving(true);
+		void updateCook(updates)
+			.then(() => {
+				onRefresh();
+				onClose();
+			})
+			.catch((err) => {
+				setError(err instanceof Error ? err.message : "Failed to update cook");
+				setSaving(false);
+			});
+	};
+
+	return (
+		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+			<div className="w-full max-w-md rounded-2xl bg-[var(--c-card)] p-6">
+				<h2 className="text-lg font-semibold text-[var(--c-text-dark)]">Edit Cook</h2>
+
+				<div className="mt-4 space-y-3">
+					<div>
+						<label className="block text-xs font-semibold text-[var(--c-text-mid)]">
+							Name
+						</label>
+						<input
+							type="text"
+							value={name}
+							onChange={(e) => setName(e.target.value)}
+							className="mt-1 h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-3 text-sm text-[var(--c-text-dark)]"
+						/>
+					</div>
+
+					<div>
+						<label className="block text-xs font-semibold text-[var(--c-text-mid)]">
+							Phone Number
+						</label>
+						<input
+							type="text"
+							value={phone}
+							onChange={(e) => setPhone(e.target.value)}
+							className="mt-1 h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-3 text-sm text-[var(--c-text-dark)]"
+						/>
+					</div>
+
+					<div className="flex items-center gap-3 rounded-lg bg-[var(--c-row)] p-3">
+						<label className="flex flex-1 cursor-pointer items-center gap-3">
+							<input
+								type="checkbox"
+								checked={isActive}
+								onChange={(e) => setIsActive(e.target.checked)}
+								className="h-4 w-4"
+							/>
+							<span className="text-sm font-semibold text-[var(--c-text-dark)]">
+								Active
+							</span>
+						</label>
+					</div>
+
+					{error && (
+						<div className="rounded-lg bg-red-50 p-3 text-xs text-red-700">
+							{error}
+						</div>
+					)}
+				</div>
+
+				<div className="mt-6 flex gap-3">
+					<button
+						onClick={onClose}
+						type="button"
+						disabled={saving}
+						className="flex-1 rounded-lg border border-[var(--c-border)] px-3 py-2 text-sm font-semibold text-[var(--c-text-mid)] hover:bg-[var(--c-muted)]"
+					>
+						Cancel
+					</button>
+					<button
+						onClick={handleSubmit}
+						type="button"
+						disabled={saving}
+						className="flex-1 rounded-lg bg-[var(--c-brand)] px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+					>
+						{saving ? "Saving..." : "Save"}
+					</button>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function SendToCookModal({
+	results,
+	period,
+	selectedCook,
+	cooks,
+	onSelectCook,
+	onClose,
+}: {
+	results: PollResults;
+	period: Period;
+	selectedCook: Cook | null;
+	cooks: Cook[];
+	onSelectCook: (cook: Cook) => void;
+	onClose: () => void;
+}) {
+	const [step, setStep] = useState<"select" | "preview">(selectedCook ? "preview" : "select");
+
+	const message = selectedCook ? formatPollResultsMessage(results, results.date) : "";
+	const whatsappUrl = selectedCook ? generateWhatsAppUrl(selectedCook.phoneNumber, message) : "";
+
+	if (step === "select") {
+		return (
+			<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+				<div className="w-full max-w-md rounded-2xl bg-[var(--c-card)] p-6">
+					<h2 className="text-lg font-semibold text-[var(--c-text-dark)]">Send Poll Result</h2>
+					<p className="mt-1 text-sm text-[var(--c-text-muted)]">
+						{period === "morning" ? "Morning" : "Evening"} Results
+					</p>
+
+					{cooks.length === 0 ? (
+						<div className="mt-4 rounded-lg bg-amber-50 p-3">
+							<p className="text-sm text-amber-900">
+								No cooks have been added yet.
+							</p>
+							<p className="mt-2 text-xs text-amber-800">
+								Add a cook from Admin → Cooks to send poll results.
+							</p>
+						</div>
+					) : (
+						<div className="mt-4 space-y-2">
+							{cooks.map((cook) => (
+								<button
+									key={cook.id}
+									onClick={() => {
+										onSelectCook(cook);
+										setStep("preview");
+									}}
+									type="button"
+									className="w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-row)] px-3 py-3 text-left transition hover:bg-[var(--c-card)]"
+								>
+									<p className="font-semibold text-[var(--c-text-dark)]">{cook.name}</p>
+									<p className="mt-1 text-xs text-[var(--c-text-muted)]">+{cook.phoneNumber}</p>
+								</button>
+							))}
+						</div>
+					)}
+
+					<div className="mt-6 flex gap-3">
+						<button
+							onClick={onClose}
+							type="button"
+							className="flex-1 rounded-lg border border-[var(--c-border)] px-3 py-2 text-sm font-semibold text-[var(--c-text-mid)] hover:bg-[var(--c-muted)]"
+						>
+							Close
+						</button>
+					</div>
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+			<div className="w-full max-w-md rounded-2xl bg-[var(--c-card)] p-6">
+				<h2 className="text-lg font-semibold text-[var(--c-text-dark)]">Send to Cook</h2>
+
+				<div className="mt-4 space-y-4">
+					<div>
+						<p className="text-xs font-semibold text-[var(--c-text-mid)]">Cook</p>
+						<div className="mt-2 rounded-lg bg-[var(--c-row)] p-3">
+							<p className="font-semibold text-[var(--c-text-dark)]">{selectedCook!.name}</p>
+							<p className="mt-1 text-sm text-[var(--c-text-muted)]">+{selectedCook!.phoneNumber}</p>
+						</div>
+					</div>
+
+					<div>
+						<p className="text-xs font-semibold text-[var(--c-text-mid)]">Message</p>
+						<div className="mt-2 whitespace-pre-wrap rounded-lg bg-[var(--c-row)] p-3 font-mono text-xs text-[var(--c-text-dark)]">
+							{message}
+						</div>
+					</div>
+				</div>
+
+				<div className="mt-6 flex gap-3">
+					<button
+						onClick={() => setStep("select")}
+						type="button"
+						className="flex-1 rounded-lg border border-[var(--c-border)] px-3 py-2 text-sm font-semibold text-[var(--c-text-mid)] hover:bg-[var(--c-muted)]"
+					>
+						Back
+					</button>
+					<a
+						href={whatsappUrl}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="flex-1 rounded-lg bg-green-500 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-green-600 no-underline"
+					>
+						Open WhatsApp
+					</a>
+				</div>
+			</div>
+		</div>
+	);
+}
+
 function AdminView({
 	data,
 	onRefresh,
@@ -1193,6 +1692,25 @@ function AdminView({
 	onRefresh: () => void;
 }) {
 	const [openUserId, setOpenUserId] = useState<string | null>(null);
+	const [adminTab, setAdminTab] = useState<"today" | "results" | "cooks">("today");
+	const [cooks, setCooks] = useState<Cook[]>([]);
+	const [loadingCooks, setLoadingCooks] = useState(false);
+	const [editingCook, setEditingCook] = useState<Cook | null>(null);
+	const [showAddCook, setShowAddCook] = useState(false);
+	const [sendToCookData, setSendToCookData] = useState<{
+		period: Period;
+		selectedCook: Cook | null;
+		results: PollResults | null;
+	} | null>(null);
+
+	useEffect(() => {
+		setLoadingCooks(true);
+		void getCooks()
+			.then((res) => setCooks(res.cooks))
+			.catch(() => setCooks([]))
+			.finally(() => setLoadingCooks(false));
+	}, []);
+
 	if (!data) return <AuthLoading message={pickRandom(brewingMessages)} />;
 	return (
 		<div className="grid gap-5">
@@ -1205,6 +1723,31 @@ function AdminView({
 						: "No pending guests"
 				}
 			/>
+
+			{/* Admin Tabs */}
+			<div className="flex gap-2 rounded-xl bg-[var(--c-card)] p-1">
+				{[
+					{ id: "today", label: "Today's choices" },
+					{ id: "results", label: "Results" },
+					{ id: "cooks", label: "Cooks" },
+				].map((tab) => (
+					<button
+						key={tab.id}
+						onClick={() => setAdminTab(tab.id as typeof adminTab)}
+						type="button"
+						className={cx(
+							"flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition",
+							adminTab === tab.id
+								? "bg-[var(--c-brand)] text-white"
+								: "text-[var(--c-text-muted)] hover:text-[var(--c-text-mid)]",
+						)}
+					>
+						{tab.label}
+					</button>
+				))}
+			</div>
+
+			{/* Guest Requests (always shown) */}
 			{data.pendingGuests.length > 0 && (
 				<section className="rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] p-4">
 					<h2 className="text-sm font-semibold text-[var(--c-text-dark)]">
@@ -1253,27 +1796,74 @@ function AdminView({
 					</div>
 				</section>
 			)}
-			<section className="rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] p-4">
-				<h2 className="text-sm font-semibold text-[var(--c-text-dark)]">
-					Today’s choices
-				</h2>
-				<div className="mt-3 grid gap-3">
-					{data.responses.map((poll) => {
-						const rowId = poll.user.id ?? poll.user.email;
-						return (
-							<AdminResponseRow
-								expanded={openUserId === rowId}
-								key={rowId}
-								poll={poll}
-								onRefresh={onRefresh}
-								onToggle={() =>
-									setOpenUserId((current) => (current === rowId ? null : rowId))
-								}
-							/>
-						);
-					})}
-				</div>
-			</section>
+
+			{/* Today's Choices Tab */}
+			{adminTab === "today" && (
+				<section className="rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] p-4">
+					<h2 className="text-sm font-semibold text-[var(--c-text-dark)]">
+						Today's choices
+					</h2>
+					<div className="mt-3 grid gap-3">
+						{data.responses.map((poll) => {
+							const rowId = poll.user.id ?? poll.user.email;
+							return (
+								<AdminResponseRow
+									expanded={openUserId === rowId}
+									key={rowId}
+									poll={poll}
+									onRefresh={onRefresh}
+									onToggle={() =>
+										setOpenUserId((current) => (current === rowId ? null : rowId))
+									}
+								/>
+							);
+						})}
+					</div>
+				</section>
+			)}
+
+			{/* Results Tab */}
+			{adminTab === "results" && (
+				<AdminResultsView
+					data={data}
+					cooks={cooks}
+					onSendToCook={(period, results) => {
+						setSendToCookData({ period, selectedCook: null, results });
+					}}
+				/>
+			)}
+
+			{/* Cooks Tab */}
+			{adminTab === "cooks" && (
+				<AdminCooksView
+					cooks={cooks}
+					loading={loadingCooks}
+					editingCook={editingCook}
+					showAddCook={showAddCook}
+					onRefresh={() => {
+						setLoadingCooks(true);
+						void getCooks()
+							.then((res) => setCooks(res.cooks))
+							.finally(() => setLoadingCooks(false));
+					}}
+					onEdit={(cook) => setEditingCook(cook)}
+					onShowAdd={() => setShowAddCook(true)}
+					onCloseAdd={() => setShowAddCook(false)}
+					onCloseEdit={() => setEditingCook(null)}
+				/>
+			)}
+
+			{/* Send to Cook Modal */}
+			{sendToCookData && (
+				<SendToCookModal
+					results={sendToCookData.results}
+					period={sendToCookData.period}
+					selectedCook={sendToCookData.selectedCook}
+					cooks={cooks.filter((c) => c.isActive)}
+					onSelectCook={(cook) => setSendToCookData({ ...sendToCookData, selectedCook: cook })}
+					onClose={() => setSendToCookData(null)}
+				/>
+			)}
 		</div>
 	);
 }
@@ -3138,3 +3728,4 @@ function PollDetailsSheet({
 }
 
 export default App;
+
