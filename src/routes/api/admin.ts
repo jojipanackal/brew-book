@@ -5,7 +5,7 @@ import { db } from '#/db'
 import { company, companyAdmin, drinkResponse, user } from '#/db/schema'
 import { auth } from '#/lib/auth'
 import { drinks, periods, type Drink, type Period } from '#/lib/drinks'
-import { ensureTodayResponses, readDay } from './drinks'
+import { ensureTodayResponses, openPeriodsForToday, readDay } from './drinks'
 
 const indiaDateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' })
 const todayKey = () => indiaDateFormatter.format(new Date())
@@ -44,7 +44,7 @@ export const Route = createFileRoute('/api/admin')({
         if (!admin) return json({ error: 'Admin access required' }, { status: 403 })
         const pending = await db.select({ id: user.id, name: user.name, company: user.company, companyId: user.companyId, requestedAt: user.guestRequestedAt }).from(user).where(and(eq(user.isGuest, true), eq(user.guestStatus, 'pending'), ...(admin.companyIds ? [inArray(user.companyId, admin.companyIds)] : [])))
         const companyIds = admin.companyIds ?? (await db.select({ id: company.id }).from(company)).map((row) => row.id)
-        await Promise.all(companyIds.map((companyId) => ensureTodayResponses(companyId, todayKey())))
+        await Promise.all(companyIds.map((companyId) => ensureTodayResponses(companyId, todayKey(), openPeriodsForToday())))
         const day = await readDay(undefined, todayKey())
         const allowedUserIds = admin.companyIds ? (await db.select({ id: user.id }).from(user).where(inArray(user.companyId, admin.companyIds))).map((row) => row.id) : null
         return json({ date: todayKey(), pendingGuests: pending, responses: allowedUserIds ? day.responses.filter((entry) => entry.user.id && allowedUserIds.includes(entry.user.id)) : day.responses })

@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray } from 'drizzle-orm'
+import { and, eq, gt, inArray, sql } from 'drizzle-orm'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { db } from '#/db'
@@ -23,6 +23,17 @@ function isDrink(value: unknown): value is Drink {
 
 function isDate(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
+
+export function openPeriodsForToday(): Period[] {
+  const parts = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false })
+    .format(new Date())
+    .split(':')
+    .map(Number)
+  const minutes = parts[0] * 60 + parts[1]
+  if (minutes >= 10 * 60 + 30 && minutes < 11 * 60) return ['morning']
+  if (minutes >= 14 * 60 + 30 && minutes < 15 * 60 + 15) return ['evening']
+  return []
 }
 
 async function getCurrentUser(request: Request) {
@@ -94,8 +105,8 @@ export async function readDay(userId: string | undefined, date: string) {
   }) }
 }
 
-export async function ensureTodayResponses(companyId: string, date: string) {
-  if (date !== todayKey()) return
+export async function ensureTodayResponses(companyId: string, date: string, periodsToEnsure: Period[] = periods) {
+  if (date !== todayKey() || periodsToEnsure.length === 0) return
 
   const members = await db.select({ id: user.id, isGuest: user.isGuest, isOnLeave: user.isOnLeave }).from(user).where(eq(user.companyId, companyId))
   const attendanceRows = await db.select({ userId: attendance.userId, period: attendance.period, status: attendance.status }).from(attendance).where(and(eq(attendance.date, date), inArray(attendance.userId, members.map((member) => member.id))))
@@ -112,7 +123,7 @@ export async function ensureTodayResponses(companyId: string, date: string) {
     defaultsByUser.set(row.userId, defaults)
   }
 
-  await db.insert(drinkResponse).values(eligibleMembers.flatMap((member) => periods.filter((period) => !unavailable.has(`${member.id}:${period}`)).map((period) => {
+  await db.insert(drinkResponse).values(eligibleMembers.flatMap((member) => periodsToEnsure.filter((period) => !unavailable.has(`${member.id}:${period}`)).map((period) => {
     const preference = defaultsByUser.get(member.id)?.[period]
     return {
       id: crypto.randomUUID(),
@@ -123,7 +134,16 @@ export async function ensureTodayResponses(companyId: string, date: string) {
       sugar: preference?.sugar ?? true,
       source: 'default' as const,
     }
-  }))).onConflictDoNothing({ target: [drinkResponse.userId, drinkResponse.date, drinkResponse.period] })
+  }))).onConflictDoUpdate({
+    target: [drinkResponse.userId, drinkResponse.date, drinkResponse.period],
+    set: {
+      drink: sql`excluded.drink`,
+      sugar: sql`excluded.sugar`,
+      updatedAt: sql`now()`,
+    },
+    // A manual or admin response is intentional and must not be replaced by a default.
+    where: eq(drinkResponse.source, 'default'),
+  })
 }
 
 export const Route = createFileRoute('/api/drinks')({
@@ -141,7 +161,7 @@ export const Route = createFileRoute('/api/drinks')({
         const companyId = currentUserCompany[0]?.companyId
         if (!companyId) return json({ error: 'Your account is not assigned to a company' }, { status: 403 })
         const beforeEnsure = await readDay(currentUser.id, requestedDate)
-        await ensureTodayResponses(companyId, requestedDate)
+        await ensureTodayResponses(companyId, requestedDate, openPeriodsForToday())
         const day = requestedDate === todayKey() ? await readDay(currentUser.id, requestedDate) : beforeEnsure
         return json({ date: requestedDate, ...day })
       },
