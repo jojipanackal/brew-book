@@ -118,6 +118,10 @@ export function updateUserResponse(input: { userId: string; period: Period; drin
   return request<{ ok: true }>('/api/admin', { method: 'POST', body: JSON.stringify({ type: 'response', date: new Date().toISOString().slice(0, 10), ...input }) })
 }
 
+export function updateUserAvailability(input: { userId: string; period: Period; status: AttendanceStatus }) {
+  return request<{ ok: true }>('/api/admin', { method: 'POST', body: JSON.stringify({ type: 'availability', date: new Date().toISOString().slice(0, 10), ...input }) })
+}
+
 export type Cook = { id: string; name: string; phoneNumber: string; isActive: boolean; createdAt: Date; updatedAt: Date }
 
 export type PollResults = {

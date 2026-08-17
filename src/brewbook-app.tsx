@@ -60,6 +60,7 @@ import {
 	type User,
 	updateCook,
 	updateGuestRequest,
+	updateUserAvailability,
 	updateUserResponse,
 	type Cook,
 } from "#/lib/drinks";
@@ -1716,6 +1717,7 @@ function AdminView({
 	onRefresh: () => void;
 }) {
 	const [openUserId, setOpenUserId] = useState<string | null>(null);
+	const [userSearch, setUserSearch] = useState("");
 	const [adminTab, setAdminTab] = useState<"today" | "results" | "cooks">("today");
 	const [cooks, setCooks] = useState<Cook[]>([]);
 	const [loadingCooks, setLoadingCooks] = useState(false);
@@ -1726,6 +1728,10 @@ function AdminView({
 		selectedCook: Cook | null;
 		results: PollResults | null;
 	} | null>(null);
+	const filteredUsers = data?.responses.filter((poll) => {
+		const query = userSearch.trim().toLowerCase();
+		return !query || `${poll.user.name} ${poll.user.email}`.toLowerCase().includes(query);
+	}) ?? [];
 
 	useEffect(() => {
 		setLoadingCooks(true);
@@ -1751,7 +1757,7 @@ function AdminView({
 			{/* Admin Tabs */}
 			<div className="flex gap-2 rounded-xl bg-[var(--c-card)] p-1">
 				{[
-					{ id: "today", label: "Today's choices" },
+					{ id: "today", label: "Users" },
 					{ id: "results", label: "Results" },
 					{ id: "cooks", label: "Cooks" },
 				].map((tab) => (
@@ -1821,14 +1827,19 @@ function AdminView({
 				</section>
 			)}
 
-			{/* Today's Choices Tab */}
+			{/* Users Tab */}
 			{adminTab === "today" && (
 				<section className="rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] p-4">
-					<h2 className="text-sm font-semibold text-[var(--c-text-dark)]">
-						Today's choices
-					</h2>
+					<h2 className="text-sm font-semibold text-[var(--c-text-dark)]">Users</h2>
+					<input
+						aria-label="Search users"
+						className="mt-3 h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-3 text-sm outline-none focus:border-[var(--c-brand-lt)]"
+						onChange={(event) => setUserSearch(event.target.value)}
+						placeholder="Search users by name or email"
+						value={userSearch}
+					/>
 					<div className="mt-3 grid gap-3">
-						{data.responses.map((poll) => {
+						{filteredUsers.map((poll) => {
 							const rowId = poll.user.id ?? poll.user.email;
 							return (
 								<AdminResponseRow
@@ -1842,6 +1853,7 @@ function AdminView({
 								/>
 							);
 						})}
+						{filteredUsers.length === 0 && <p className="py-3 text-sm text-[var(--c-text-muted)]">No users found.</p>}
 					</div>
 				</section>
 			)}
@@ -1911,6 +1923,10 @@ function AdminResponseRow({
 			sugar: drink === "No drink" ? true : sugar,
 		}).then(onRefresh);
 	};
+	const updateAvailability = (period: Period, status: AttendanceStatus) => {
+		if (!poll.user.id) return;
+		void updateUserAvailability({ userId: poll.user.id, period, status }).then(onRefresh);
+	};
 	const removeGuest = () => {
 		if (!poll.user.id) return;
 		void updateGuestRequest({ type: "removeGuest", userId: poll.user.id }).then(
@@ -1949,11 +1965,13 @@ function AdminResponseRow({
 								period={period}
 								drink={poll.choices[period]}
 								sugar={poll.sugar[period]}
-								source={poll.sources[period]}
+								 source={poll.sources[period]}
+								availability={poll.availability[period]}
 								onDrinkChange={(drink) => update(period, drink)}
-								onSugarChange={(sugar) =>
+									onSugarChange={(sugar) =>
 									update(period, poll.choices[period], sugar)
 								}
+								onAvailabilityChange={(status) => updateAvailability(period, status)}
 							/>
 						))}
 					</div>
@@ -1976,15 +1994,19 @@ function AdminPeriodControl({
 	drink,
 	sugar,
 	source,
+	availability,
 	onDrinkChange,
 	onSugarChange,
+	onAvailabilityChange,
 }: {
 	period: Period;
 	drink: Drink;
 	sugar: boolean;
 	source: PollSource;
+	availability: AttendanceStatus;
 	onDrinkChange: (drink: Drink) => void;
 	onSugarChange: (sugar: boolean) => void;
+	onAvailabilityChange: (status: AttendanceStatus) => void;
 }) {
 	return (
 		<section className="rounded-xl border border-[var(--c-border-2)] bg-[var(--c-card)] p-3">
@@ -1994,15 +2016,32 @@ function AdminPeriodControl({
 				</h3>
 				<MetaTag muted>{sourceLabel(source)}</MetaTag>
 			</div>
-			<select
-				className="mt-2 h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-2 text-sm font-semibold text-[var(--c-text-mid)]"
-				onChange={(event) => onDrinkChange(event.target.value as Drink)}
-				value={drink}
-			>
-				{drinks.map((item) => (
-					<option key={item}>{item}</option>
-				))}
-			</select>
+			<label className="mt-2 block text-[11px] font-semibold text-[var(--c-text-muted)]">
+				Drink choice
+				<select
+					aria-label={`${period} drink choice`}
+					className="mt-1 h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-2 text-sm font-semibold text-[var(--c-text-mid)]"
+					onChange={(event) => onDrinkChange(event.target.value as Drink)}
+					value={drink}
+				>
+					{drinks.map((item) => (
+						<option key={item}>{item}</option>
+					))}
+				</select>
+			</label>
+			<label className="mt-2 block text-[11px] font-semibold text-[var(--c-text-muted)]">
+				Attendance
+				<select
+					aria-label={`${period} attendance`}
+					className="mt-1 h-9 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-2 text-xs font-semibold text-[var(--c-text-mid)]"
+					onChange={(event) => onAvailabilityChange(event.target.value as AttendanceStatus)}
+					value={availability}
+				>
+					<option value="office">In office</option>
+					<option value="wfh">Working from home</option>
+					<option value="leave">On leave</option>
+				</select>
+			</label>
 			<div className="mt-3 flex min-h-7 items-center justify-between gap-3">
 				<SugarToggle
 					compact
@@ -3572,12 +3611,14 @@ function DrinkInfoSheet({ drink, onClose }: { drink: Drink; onClose: () => void 
 			<section
 				className="no-scrollbar relative z-10 flex h-[88svh] w-full flex-col overflow-y-auto rounded-t-3xl bg-[var(--c-card)] overscroll-contain shadow-2xl sm:h-auto sm:max-h-[88svh] sm:max-w-lg sm:rounded-2xl"
 				style={{ transform: dragY > 0 ? `translateY(${dragY}px)` : undefined, transition: dragY === 0 ? "transform 0.25s ease" : "none" }}
-				onTouchStart={handleTouchStart}
-				onTouchMove={handleTouchMove}
-				onTouchEnd={handleTouchEnd}
 			>
 				{/* Handle */}
-				<div className="mx-auto mt-3 h-1 w-10 shrink-0 rounded-full bg-[var(--c-drag)] sm:hidden" />
+				<div
+					className="mx-auto mt-3 h-1 w-10 shrink-0 touch-none rounded-full bg-[var(--c-drag)] sm:hidden"
+					onTouchStart={handleTouchStart}
+					onTouchMove={handleTouchMove}
+					onTouchEnd={handleTouchEnd}
+				/>
 
 				{/* Hero */}
 				<div className="flex flex-col items-center gap-2 bg-[var(--c-accent-bg)] px-6 py-8 text-center">
@@ -3680,11 +3721,13 @@ function PollDetailsSheet({
 			<section
 				className="relative z-10 flex h-[88svh] min-h-0 w-full flex-col rounded-t-3xl bg-[var(--c-card)] px-4 pb-6 pt-3 shadow-2xl overscroll-contain sm:h-auto sm:max-h-[88svh] sm:max-w-lg sm:rounded-2xl sm:p-6"
 				style={{ transform: dragY > 0 ? `translateY(${dragY}px)` : undefined, transition: dragY === 0 ? "transform 0.25s ease" : "none" }}
-				onTouchStart={handleTouchStart}
-				onTouchMove={handleTouchMove}
-				onTouchEnd={handleTouchEnd}
 			>
-				<div className="mx-auto mb-4 h-1 w-10 shrink-0 rounded-full bg-[var(--c-drag)] sm:hidden" />
+				<div
+					className="mx-auto mb-4 h-1 w-10 shrink-0 touch-none rounded-full bg-[var(--c-drag)] sm:hidden"
+					onTouchStart={handleTouchStart}
+					onTouchMove={handleTouchMove}
+					onTouchEnd={handleTouchEnd}
+				/>
 				<div className="shrink-0 border-b border-[var(--c-border-2)] pb-4">
 					<div className="flex items-start justify-between">
 						<div>
