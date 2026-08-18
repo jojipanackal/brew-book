@@ -86,9 +86,8 @@ jobs:
             clean_cron="$(printf '%s\n' "$current_cron" | awk '!/brew-book poll scheduler|brew-book-morning.lock|brew-book-evening.lock|ensure-polls.ts|poll-worker/')"
             {
               printf '%s\n' "$clean_cron"
-              printf '%s\n' 'CRON_TZ=Asia/Kolkata'
-              printf '%s\n' '# brew-book poll scheduler'
-              printf '%s\n' '29 10 * * * cd /var/www/brew-book && /usr/bin/flock -n /tmp/brew-book-morning.lock docker exec brew-book node_modules/.bin/tsx scripts/ensure-polls.ts >> /var/www/brew-book/logs/polls.log 2>&1'
-              printf '%s\n' '29 14 * * * cd /var/www/brew-book && /usr/bin/flock -n /tmp/brew-book-evening.lock docker exec brew-book node_modules/.bin/tsx scripts/ensure-polls.ts >> /var/www/brew-book/logs/polls.log 2>&1'
+              printf '%s\n' '# brew-book poll scheduler (server timezone: UTC)'
+              printf '%s\n' '59 4 * * * cd /var/www/brew-book && /usr/bin/flock -n /tmp/brew-book-morning.lock docker exec brew-book node_modules/.bin/tsx scripts/ensure-polls.ts >> /var/www/brew-book/logs/polls.log 2>&1'
+              printf '%s\n' '59 8 * * * cd /var/www/brew-book && /usr/bin/flock -n /tmp/brew-book-evening.lock docker exec brew-book node_modules/.bin/tsx scripts/ensure-polls.ts >> /var/www/brew-book/logs/polls.log 2>&1'
             } | crontab -
             docker image prune -f
