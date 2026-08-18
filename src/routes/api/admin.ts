@@ -5,7 +5,8 @@ import { db } from '#/db'
 import { attendance, company, companyAdmin, drinkResponse, user } from '#/db/schema'
 import { auth } from '#/lib/auth'
 import { drinks, periods, type AttendanceStatus, type Drink, type Period } from '#/lib/drinks'
-import { ensureTodayResponses, openPeriodsForToday, readDay } from './drinks'
+import { ensureTodayResponses, openPeriodsForToday } from '#/lib/poll-responses'
+import { readDay } from './drinks'
 
 const indiaDateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' })
 const todayKey = () => indiaDateFormatter.format(new Date())

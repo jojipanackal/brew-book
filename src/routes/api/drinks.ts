@@ -1,13 +1,11 @@
-import { and, eq, gt, inArray, sql } from 'drizzle-orm'
+import { and, eq, gt, inArray } from 'drizzle-orm'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { db } from '#/db'
 import { attendance, drinkDefault, drinkResponse, user } from '#/db/schema'
 import { auth } from '#/lib/auth'
 import { drinks, periods, type AttendanceStatus, type Drink, type DrinkChoice, type Period, type PollSource, type SugarChoice } from '#/lib/drinks'
-
-const indiaDateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' })
-const todayKey = () => indiaDateFormatter.format(new Date())
+import { currentlyOpenPeriods, ensureTodayResponses, openPeriodsForToday, todayKey } from '#/lib/poll-responses'
 
 function json(data: unknown, init?: ResponseInit) {
   return Response.json(data, init)
@@ -23,17 +21,6 @@ function isDrink(value: unknown): value is Drink {
 
 function isDate(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
-}
-
-export function openPeriodsForToday(): Period[] {
-  const parts = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false })
-    .format(new Date())
-    .split(':')
-    .map(Number)
-  const minutes = parts[0] * 60 + parts[1]
-  if (minutes >= 14 * 60 + 30) return periods
-  if (minutes >= 10 * 60 + 30) return ['morning']
-  return []
 }
 
 async function getCurrentUser(request: Request) {
@@ -105,47 +92,6 @@ export async function readDay(userId: string | undefined, date: string) {
   }) }
 }
 
-export async function ensureTodayResponses(companyId: string, date: string, periodsToEnsure: Period[] = periods) {
-  if (date !== todayKey() || periodsToEnsure.length === 0) return
-
-  const members = await db.select({ id: user.id, isGuest: user.isGuest }).from(user).where(eq(user.companyId, companyId))
-  const attendanceRows = await db.select({ userId: attendance.userId, period: attendance.period, status: attendance.status }).from(attendance).where(and(eq(attendance.date, date), inArray(attendance.userId, members.map((member) => member.id))))
-  const unavailable = new Set(attendanceRows.filter((row) => row.status !== 'office').map((row) => `${row.userId}:${row.period}`))
-  const eligibleMembers = members.filter((member) => !member.isGuest)
-  if (!eligibleMembers.length) return
-
-  const memberIds = eligibleMembers.map((member) => member.id)
-  const defaultRows = await db.select({ userId: drinkDefault.userId, period: drinkDefault.period, drink: drinkDefault.drink, sugar: drinkDefault.sugar }).from(drinkDefault).where(inArray(drinkDefault.userId, memberIds))
-  const defaultsByUser = new Map<string, Partial<Record<Period, { drink: Drink; sugar: boolean }>>>()
-  for (const row of defaultRows) {
-    const defaults = defaultsByUser.get(row.userId) ?? {}
-    defaults[row.period] = { drink: row.drink, sugar: row.sugar }
-    defaultsByUser.set(row.userId, defaults)
-  }
-
-  await db.insert(drinkResponse).values(eligibleMembers.flatMap((member) => periodsToEnsure.filter((period) => !unavailable.has(`${member.id}:${period}`)).map((period) => {
-    const preference = defaultsByUser.get(member.id)?.[period]
-    return {
-      id: crypto.randomUUID(),
-      userId: member.id,
-      date,
-      period,
-      drink: preference?.drink ?? 'No drink',
-      sugar: preference?.sugar ?? true,
-      source: 'default' as const,
-    }
-  }))).onConflictDoUpdate({
-    target: [drinkResponse.userId, drinkResponse.date, drinkResponse.period],
-    set: {
-      drink: sql`excluded.drink`,
-      sugar: sql`excluded.sugar`,
-      updatedAt: sql`now()`,
-    },
-    // A manual or admin response is intentional and must not be replaced by a default.
-    where: eq(drinkResponse.source, 'default'),
-  })
-}
-
 export const Route = createFileRoute('/api/drinks')({
   server: {
     handlers: {
@@ -174,7 +120,7 @@ export const Route = createFileRoute('/api/drinks')({
           if (!isPeriod(body.period) || !isDrink(body.drink) || typeof body.sugar !== 'boolean') return json({ error: 'Invalid default' }, { status: 400 })
           const sugar = body.drink === 'No drink' ? true : body.sugar
           await db.insert(drinkDefault).values({ userId: currentUser.id, period: body.period, drink: body.drink, sugar }).onConflictDoUpdate({ target: [drinkDefault.userId, drinkDefault.period], set: { drink: body.drink, sugar, updatedAt: new Date() } })
-          await db.update(drinkResponse).set({ drink: body.drink, sugar, updatedAt: new Date() }).where(and(eq(drinkResponse.userId, currentUser.id), eq(drinkResponse.date, todayKey()), eq(drinkResponse.period, body.period), eq(drinkResponse.source, 'default')))
+          await db.update(drinkResponse).set({ drink: body.drink, sugar, updatedAt: new Date() }).where(and(eq(drinkResponse.userId, currentUser.id), eq(drinkResponse.date, todayKey()), eq(drinkResponse.period, body.period), eq(drinkResponse.source, 'default'), inArray(drinkResponse.period, currentlyOpenPeriods())))
           const rows = await db.select({ period: drinkDefault.period, drink: drinkDefault.drink, sugar: drinkDefault.sugar }).from(drinkDefault).where(eq(drinkDefault.userId, currentUser.id))
           return json(defaultsFromRows(rows))
         }
