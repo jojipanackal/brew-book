@@ -31,8 +31,8 @@ export function openPeriodsForToday(): Period[] {
     .split(':')
     .map(Number)
   const minutes = parts[0] * 60 + parts[1]
-  if (minutes >= 10 * 60 + 30 && minutes < 11 * 60) return ['morning']
-  if (minutes >= 14 * 60 + 30 && minutes < 15 * 60 + 15) return ['evening']
+  if (minutes >= 14 * 60 + 30) return periods
+  if (minutes >= 10 * 60 + 30) return ['morning']
   return []
 }
 
@@ -108,10 +108,10 @@ export async function readDay(userId: string | undefined, date: string) {
 export async function ensureTodayResponses(companyId: string, date: string, periodsToEnsure: Period[] = periods) {
   if (date !== todayKey() || periodsToEnsure.length === 0) return
 
-  const members = await db.select({ id: user.id, isGuest: user.isGuest, isOnLeave: user.isOnLeave }).from(user).where(eq(user.companyId, companyId))
+  const members = await db.select({ id: user.id, isGuest: user.isGuest }).from(user).where(eq(user.companyId, companyId))
   const attendanceRows = await db.select({ userId: attendance.userId, period: attendance.period, status: attendance.status }).from(attendance).where(and(eq(attendance.date, date), inArray(attendance.userId, members.map((member) => member.id))))
   const unavailable = new Set(attendanceRows.filter((row) => row.status !== 'office').map((row) => `${row.userId}:${row.period}`))
-  const eligibleMembers = members.filter((member) => !member.isOnLeave && !member.isGuest)
+  const eligibleMembers = members.filter((member) => !member.isGuest)
   if (!eligibleMembers.length) return
 
   const memberIds = eligibleMembers.map((member) => member.id)
