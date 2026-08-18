@@ -3722,25 +3722,27 @@ function PollDetailsSheet({
 				className="relative z-10 flex h-[88svh] min-h-0 w-full flex-col rounded-t-3xl bg-[var(--c-card)] px-4 pb-6 pt-3 shadow-2xl overscroll-contain sm:h-auto sm:max-h-[88svh] sm:max-w-lg sm:rounded-2xl sm:p-6"
 				style={{ transform: dragY > 0 ? `translateY(${dragY}px)` : undefined, transition: dragY === 0 ? "transform 0.25s ease" : "none" }}
 			>
-				<div
-					className="mx-auto mb-4 h-1 w-10 shrink-0 touch-none rounded-full bg-[var(--c-drag)] sm:hidden"
-					onTouchStart={handleTouchStart}
-					onTouchMove={handleTouchMove}
-					onTouchEnd={handleTouchEnd}
-				/>
 				<div className="shrink-0 border-b border-[var(--c-border-2)] pb-4">
-					<div className="flex items-start justify-between">
-						<div>
-							<p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--c-brand-lt)]">
-								{date === todayKey ? "Today" : displayDate(date)}
-							</p>
-							<h2 className="mt-1 font-serif text-2xl text-[var(--c-text-dark)]">
-								{periodInfo?.label ?? period}
-							</h2>
-							<p className="mt-1 text-sm text-[var(--c-text-dim)]">
-								{filteredPolls.length}{" "}
-								{filteredPolls.length === 1 ? "response" : "responses"}
-							</p>
+					<div
+						className="[touch-action:none]"
+						onTouchStart={handleTouchStart}
+						onTouchMove={handleTouchMove}
+						onTouchEnd={handleTouchEnd}
+					>
+						<div className="mx-auto mb-4 h-1 w-10 shrink-0 rounded-full bg-[var(--c-drag)] sm:hidden" />
+						<div className="flex items-start justify-between">
+							<div>
+								<p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--c-brand-lt)]">
+									{date === todayKey ? "Today" : displayDate(date)}
+								</p>
+								<h2 className="mt-1 font-serif text-2xl text-[var(--c-text-dark)]">
+									{periodInfo?.label ?? period}
+								</h2>
+								<p className="mt-1 text-sm text-[var(--c-text-dim)]">
+									{filteredPolls.length}{" "}
+									{filteredPolls.length === 1 ? "response" : "responses"}
+								</p>
+							</div>
 						</div>
 					</div>
 					<div className="mt-4 grid grid-cols-4 gap-2">
