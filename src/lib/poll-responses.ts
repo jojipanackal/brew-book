@@ -1,8 +1,8 @@
 import { and, eq, inArray, sql } from 'drizzle-orm'
 
-import { db } from '#/db'
-import { attendance, drinkDefault, drinkResponse, user } from '#/db/schema'
-import { periods, type Period } from '#/lib/drinks'
+import { db } from '../db'
+import { attendance, drinkDefault, drinkResponse, user } from '../db/schema'
+import { periods, type Period } from './drinks'
 
 const indiaDateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' })
 const indiaTimeFormatter = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false })
