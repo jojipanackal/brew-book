@@ -1,7 +1,8 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, X as XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
 	type AdminDashboard,
+	type AttendanceStatus,
 	type Cook,
 	calculatePollResults,
 	createCook,
@@ -17,6 +18,7 @@ import {
 	periods,
 	updateCook,
 	updateGuestRequest,
+	updateUserAvailability,
 	updateUserResponse,
 } from "#/lib/drinks";
 import { brewingMessages } from "../constants";
@@ -592,6 +594,7 @@ export function AdminView({
 	onRefresh: () => void;
 }) {
 	const [openUserId, setOpenUserId] = useState<string | null>(null);
+	const [userSearch, setUserSearch] = useState("");
 	const [adminTab, setAdminTab] = useState<"today" | "results" | "cooks">(
 		"today",
 	);
@@ -604,6 +607,14 @@ export function AdminView({
 		selectedCook: Cook | null;
 		results: PollResults | null;
 	} | null>(null);
+	const filteredUsers =
+		data?.responses.filter((poll) => {
+			const query = userSearch.trim().toLowerCase();
+			return (
+				!query ||
+				`${poll.user.name} ${poll.user.email}`.toLowerCase().includes(query)
+			);
+		}) ?? [];
 
 	useEffect(() => {
 		setLoadingCooks(true);
@@ -629,7 +640,7 @@ export function AdminView({
 			{/* Admin Tabs */}
 			<div className="flex gap-2 rounded-xl bg-[var(--c-card)] p-1">
 				{[
-					{ id: "today", label: "Today's choices" },
+					{ id: "today", label: "Users" },
 					{ id: "results", label: "Results" },
 					{ id: "cooks", label: "Cooks" },
 				].map((tab) => (
@@ -703,10 +714,29 @@ export function AdminView({
 			{adminTab === "today" && (
 				<section className="rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] p-4">
 					<h2 className="text-sm font-semibold text-[var(--c-text-dark)]">
-						Today's choices
+						Users
 					</h2>
+					<div className="relative mt-3">
+						<input
+							aria-label="Search users"
+							className="h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-3 pr-10 text-sm outline-none focus:border-[var(--c-brand-lt)]"
+							onChange={(event) => setUserSearch(event.target.value)}
+							placeholder="Search users by name or email"
+							value={userSearch}
+						/>
+						{userSearch && (
+							<button
+								aria-label="Clear user search"
+								className="absolute right-1 top-1 grid size-8 place-items-center rounded-md text-[var(--c-text-muted)] hover:bg-[var(--c-muted)]"
+								onClick={() => setUserSearch("")}
+								type="button"
+							>
+								<XIcon size={15} />
+							</button>
+						)}
+					</div>
 					<div className="mt-3 grid gap-3">
-						{data.responses.map((poll) => {
+						{filteredUsers.map((poll) => {
 							const rowId = poll.user.id ?? poll.user.email;
 							return (
 								<AdminResponseRow
@@ -722,6 +752,11 @@ export function AdminView({
 								/>
 							);
 						})}
+						{filteredUsers.length === 0 && (
+							<p className="py-3 text-sm text-[var(--c-text-muted)]">
+								No users found.
+							</p>
+						)}
 					</div>
 				</section>
 			)}
@@ -836,6 +871,15 @@ function AdminResponseRow({
 								onSugarChange={(sugar) =>
 									update(period, poll.choices[period], sugar)
 								}
+								onAvailabilityChange={(status) => {
+									if (!poll.user.id) return;
+									void updateUserAvailability({
+										userId: poll.user.id,
+										period,
+										status,
+									}).then(onRefresh);
+								}}
+								availability={poll.availability[period]}
 							/>
 						))}
 					</div>
@@ -858,15 +902,19 @@ function AdminPeriodControl({
 	drink,
 	sugar,
 	source,
+	availability,
 	onDrinkChange,
 	onSugarChange,
+	onAvailabilityChange,
 }: {
 	period: Period;
 	drink: Drink;
 	sugar: boolean;
 	source: PollSource;
+	availability: AttendanceStatus;
 	onDrinkChange: (drink: Drink) => void;
 	onSugarChange: (sugar: boolean) => void;
+	onAvailabilityChange: (status: AttendanceStatus) => void;
 }) {
 	return (
 		<section className="rounded-xl border border-[var(--c-border-2)] bg-[var(--c-card)] p-3">
@@ -885,6 +933,21 @@ function AdminPeriodControl({
 					<option key={item}>{item}</option>
 				))}
 			</select>
+			<label className="mt-2 block text-[11px] font-semibold text-[var(--c-text-muted)]">
+				Attendance
+				<select
+					aria-label={`${period} attendance`}
+					className="mt-1 h-9 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-2 text-xs font-semibold text-[var(--c-text-mid)]"
+					onChange={(event) =>
+						onAvailabilityChange(event.target.value as AttendanceStatus)
+					}
+					value={availability}
+				>
+					<option value="office">In office</option>
+					<option value="wfh">Working from home</option>
+					<option value="leave">On leave</option>
+				</select>
+			</label>
 			<div className="mt-3 flex min-h-7 items-center justify-between gap-3">
 				<SugarToggle
 					compact

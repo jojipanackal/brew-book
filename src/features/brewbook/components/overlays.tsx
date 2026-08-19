@@ -374,8 +374,23 @@ export function DrinkInfoSheet({
 				onTouchMove={handleTouchMove}
 				onTouchEnd={handleTouchEnd}
 			>
-				{/* Handle */}
-				<div className="mx-auto mt-3 h-1 w-10 shrink-0 rounded-full bg-[var(--c-drag)] sm:hidden" />
+				{/* Drag area */}
+				<div
+					className="relative flex min-h-14 shrink-0 touch-none items-start justify-center px-4 pt-3"
+					onTouchStart={handleTouchStart}
+					onTouchMove={handleTouchMove}
+					onTouchEnd={handleTouchEnd}
+				>
+					<div className="mt-0 h-1 w-10 rounded-full bg-[var(--c-drag)] sm:hidden" />
+					<button
+						aria-label="Close drink information"
+						className="absolute right-3 top-2 grid size-9 place-items-center rounded-full text-[var(--c-text-muted)] transition hover:bg-[var(--c-muted)] hover:text-[var(--c-text-mid)]"
+						onClick={onClose}
+						type="button"
+					>
+						<XIcon size={18} />
+					</button>
+				</div>
 
 				{/* Hero */}
 				<div className="flex flex-col items-center gap-2 bg-[var(--c-accent-bg)] px-6 py-8 text-center">
@@ -467,6 +482,7 @@ export function PollDetailsSheet({
 	onClose: () => void;
 }) {
 	const [sourceFilter, setSourceFilter] = useState<PollSource | "all">("all");
+	const [searchQuery, setSearchQuery] = useState("");
 	const [dragY, setDragY] = useState(0);
 	const dragStart = useState<number | null>(null);
 	const periodInfo = periodDetails.find((item) => item.id === period);
@@ -474,8 +490,21 @@ export function PollDetailsSheet({
 		sourceFilter === "all"
 			? polls
 			: polls.filter((item) => item.sources[period] === sourceFilter);
+	const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+	const searchedPolls = filteredPolls.filter(
+		(item) =>
+			!normalizedSearchQuery ||
+			`${item.user.name} ${item.user.email}`
+				.toLowerCase()
+				.includes(normalizedSearchQuery),
+	);
 	const awayPolls = filteredPolls.filter(
-		(item) => item.availability[period] !== "office",
+		(item) =>
+			item.availability[period] !== "office" &&
+			(!normalizedSearchQuery ||
+				`${item.user.name} ${item.user.email}`
+					.toLowerCase()
+					.includes(normalizedSearchQuery)),
 	);
 
 	function handleTouchStart(e: React.TouchEvent) {
@@ -507,24 +536,36 @@ export function PollDetailsSheet({
 					transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
 					transition: dragY === 0 ? "transform 0.25s ease" : "none",
 				}}
-				onTouchStart={handleTouchStart}
-				onTouchMove={handleTouchMove}
-				onTouchEnd={handleTouchEnd}
 			>
-				<div className="mx-auto mb-4 h-1 w-10 shrink-0 rounded-full bg-[var(--c-drag)] sm:hidden" />
 				<div className="shrink-0 border-b border-[var(--c-border-2)] pb-4">
-					<div className="flex items-start justify-between">
-						<div>
-							<p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--c-brand-lt)]">
-								{date === todayKey ? "Today" : displayDate(date)}
-							</p>
-							<h2 className="mt-1 font-serif text-2xl text-[var(--c-text-dark)]">
-								{periodInfo?.label ?? period}
-							</h2>
-							<p className="mt-1 text-sm text-[var(--c-text-dim)]">
-								{filteredPolls.length}{" "}
-								{filteredPolls.length === 1 ? "response" : "responses"}
-							</p>
+					<div
+						className="[touch-action:none]"
+						onTouchStart={handleTouchStart}
+						onTouchMove={handleTouchMove}
+						onTouchEnd={handleTouchEnd}
+					>
+						<div className="mx-auto mb-4 h-1 w-10 shrink-0 rounded-full bg-[var(--c-drag)] sm:hidden" />
+						<div className="flex items-start justify-between gap-3">
+							<div>
+								<p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--c-brand-lt)]">
+									{date === todayKey ? "Today" : displayDate(date)}
+								</p>
+								<h2 className="mt-1 font-serif text-2xl text-[var(--c-text-dark)]">
+									{periodInfo?.label ?? period}
+								</h2>
+								<p className="mt-1 text-sm text-[var(--c-text-dim)]">
+									{searchedPolls.length}{" "}
+									{searchedPolls.length === 1 ? "response" : "responses"}
+								</p>
+							</div>
+							<button
+								aria-label="Close poll details"
+								className="grid size-9 shrink-0 place-items-center rounded-full text-[var(--c-text-muted)] transition hover:bg-[var(--c-muted)] hover:text-[var(--c-text-mid)]"
+								onClick={onClose}
+								type="button"
+							>
+								<XIcon size={18} />
+							</button>
 						</div>
 					</div>
 					<div className="mt-4 grid grid-cols-4 gap-2">
@@ -544,9 +585,28 @@ export function PollDetailsSheet({
 							</button>
 						))}
 					</div>
+					<div className="relative mt-3">
+						<input
+							aria-label="Search poll responses"
+							className="h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-3 pr-10 text-sm outline-none focus:border-[var(--c-brand-lt)]"
+							onChange={(event) => setSearchQuery(event.target.value)}
+							placeholder="Search people by name or email"
+							value={searchQuery}
+						/>
+						{searchQuery && (
+							<button
+								aria-label="Clear poll response search"
+								className="absolute right-1 top-1 grid size-8 place-items-center rounded-md text-[var(--c-text-muted)] hover:bg-[var(--c-muted)]"
+								onClick={() => setSearchQuery("")}
+								type="button"
+							>
+								×
+							</button>
+						)}
+					</div>
 				</div>
 				<div className="no-scrollbar mt-4 min-h-0 flex-1 grid content-start gap-4 overflow-y-auto overscroll-contain [touch-action:pan-y]">
-					{awayPolls.length > 0 && (
+					{awayPolls.length > 0 && !normalizedSearchQuery && (
 						<section>
 							<h3 className="mb-2 text-base font-semibold text-[var(--c-text-muted)]">
 								Not ordering this round
@@ -557,19 +617,24 @@ export function PollDetailsSheet({
 										className="flex items-center justify-between rounded-xl bg-[var(--c-row)] px-3 py-2.5"
 										key={item.user.email}
 									>
-										<span className="text-sm font-semibold">
+										<span className="min-w-0 truncate text-sm font-semibold">
 											{compactName(item.user)}
 										</span>
-										<MetaTag muted>
-											{availabilityLabel(item.availability[period])}
-										</MetaTag>
+										<span className="flex shrink-0 flex-wrap justify-end gap-1">
+											<MetaTag muted>
+												{availabilityLabel(item.availability[period])}
+											</MetaTag>
+											<MetaTag muted>
+												{sourceLabel(item.availabilitySources[period])}
+											</MetaTag>
+										</span>
 									</div>
 								))}
 							</div>
 						</section>
 					)}
 					{drinks.map((drink) => {
-						const drinkPolls = filteredPolls.filter(
+						const drinkPolls = searchedPolls.filter(
 							(item) =>
 								item.availability[period] === "office" &&
 								item.choices[period] === drink,
@@ -615,6 +680,11 @@ export function PollDetailsSheet({
 							</section>
 						);
 					})}
+					{searchedPolls.length === 0 && (
+						<p className="rounded-xl bg-[var(--c-row)] px-3 py-3 text-sm text-[var(--c-text-muted)]">
+							No responses found.
+						</p>
+					)}
 				</div>
 			</section>
 		</div>

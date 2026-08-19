@@ -79,10 +79,14 @@ export function TodayView({
 	}, []);
 
 	const morningClosed = nowIST >= 11 * 60;
+	const morningNotOpen = nowIST < 10 * 60 + 30;
+	const eveningNotOpen = nowIST < 14 * 60 + 30;
 	const eveningClosed = nowIST >= 15 * 60 + 15;
 
 	const isPeriodClosed = (id: Period) =>
-		id === "morning" ? morningClosed : eveningClosed;
+		id === "morning"
+			? morningNotOpen || morningClosed
+			: eveningNotOpen || eveningClosed;
 
 	// Twinkle Twinkle Little Star — C C G G A A G, F F E E D D C, ...
 	const TWINKLE = [
@@ -134,6 +138,15 @@ export function TodayView({
 							<DrinkPoll
 								period={period}
 								closed={isPeriodClosed(period.id)}
+								closedMessage={
+									period.id === "morning"
+										? morningNotOpen
+											? "Poll opens at 10:30 AM"
+											: "Poll closed"
+										: eveningNotOpen
+											? "Poll opens at 2:30 PM"
+											: "Poll closed"
+								}
 								polls={todayPolls}
 								selected={entry[period.id]}
 								sugar={sugar[period.id]}
@@ -231,6 +244,7 @@ function AvailabilityControl({
 function DrinkPoll({
 	period,
 	closed = false,
+	closedMessage = "Poll closed",
 	polls,
 	selected,
 	sugar,
@@ -241,6 +255,7 @@ function DrinkPoll({
 }: {
 	period: { id: Period; label: string; helper: string };
 	closed?: boolean;
+	closedMessage?: string;
 	polls: PollRecord[];
 	selected?: Drink;
 	sugar: boolean;
@@ -258,6 +273,7 @@ function DrinkPoll({
 	const unavailableCount = polls.length - activePolls.length;
 	const total = activePolls.length;
 	const [infoDrink, setInfoDrink] = useState<Drink | null>(null);
+	const pollUpcoming = closedMessage.startsWith("Poll opens");
 	return (
 		<div className="overflow-hidden rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] shadow-[0_8px_30px_rgba(77,57,38,0.04)]">
 			<div className="flex items-center justify-between gap-4 border-b border-[var(--c-border-2)] px-4 py-3.5 sm:px-5">
@@ -283,9 +299,21 @@ function DrinkPoll({
 				/>
 			</div>
 			{closed && (
-				<div className="flex items-center gap-2 border-b border-[var(--c-border-2)] bg-[var(--c-muted)] px-4 py-2.5 text-xs font-semibold text-[var(--c-text-muted)] sm:px-5">
-					<span className="size-1.5 rounded-full bg-[var(--c-brand-lt)]" />
-					Poll closed
+				<div
+					className={cx(
+						"flex items-center gap-2 border-b px-4 py-2.5 text-xs font-semibold sm:px-5",
+						pollUpcoming
+							? "border-green-200 bg-green-50 text-green-700"
+							: "border-red-200 bg-red-50 text-red-700",
+					)}
+				>
+					<span
+						className={cx(
+							"size-1.5 rounded-full",
+							pollUpcoming ? "bg-green-600" : "bg-red-600",
+						)}
+					/>
+					{closedMessage}
 				</div>
 			)}
 			<div className="grid gap-2 p-3 sm:p-4">
