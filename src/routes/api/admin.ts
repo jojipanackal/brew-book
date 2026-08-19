@@ -77,7 +77,7 @@ export const Route = createFileRoute('/api/admin')({
         }
         if (body.type === 'availability' && isPeriod(body.period) && isAttendanceStatus(body.status)) {
           const attendanceDate = typeof body.date === 'string' ? body.date : todayKey()
-          await db.insert(attendance).values({ id: crypto.randomUUID(), userId: body.userId, date: attendanceDate, period: body.period, status: body.status }).onConflictDoUpdate({ target: [attendance.userId, attendance.date, attendance.period], set: { status: body.status, updatedAt: new Date() } })
+          await db.insert(attendance).values({ id: crypto.randomUUID(), userId: body.userId, date: attendanceDate, period: body.period, status: body.status, source: 'admin' }).onConflictDoUpdate({ target: [attendance.userId, attendance.date, attendance.period], set: { status: body.status, source: 'admin', updatedAt: new Date() } })
           return json({ ok: true })
         }
         return json({ error: 'Invalid admin action' }, { status: 400 })

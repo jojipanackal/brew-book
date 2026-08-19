@@ -148,8 +148,8 @@ export const Route = createFileRoute('/api/profile')({
         if (!currentUser) return json({ error: 'Unauthorized' }, { status: 401 })
         const body = await request.json() as { date?: unknown; period?: unknown; status?: unknown }
         if (!isDate(body.date) || !isPeriod(body.period) || !isAttendanceStatus(body.status)) return json({ error: 'Invalid availability' }, { status: 400 })
-        await db.insert(attendance).values({ id: crypto.randomUUID(), userId: currentUser.id, date: body.date, period: body.period, status: body.status })
-          .onConflictDoUpdate({ target: [attendance.userId, attendance.date, attendance.period], set: { status: body.status, updatedAt: new Date() } })
+        await db.insert(attendance).values({ id: crypto.randomUUID(), userId: currentUser.id, date: body.date, period: body.period, status: body.status, source: 'manual' })
+          .onConflictDoUpdate({ target: [attendance.userId, attendance.date, attendance.period], set: { status: body.status, source: 'manual', updatedAt: new Date() } })
         if (body.status !== 'office') {
           await db.insert(drinkResponse).values({ id: crypto.randomUUID(), userId: currentUser.id, date: body.date, period: body.period, drink: 'No drink', sugar: true, source: 'manual' }).onConflictDoUpdate({ target: [drinkResponse.userId, drinkResponse.date, drinkResponse.period], set: { drink: 'No drink', sugar: true, source: 'manual', updatedAt: new Date() } })
         }

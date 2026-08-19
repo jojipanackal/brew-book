@@ -92,6 +92,13 @@
       "when": 1786863766060,
       "tag": "0012_common_hiroim",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787100000000,
+      "tag": "0013_attendance_source",
+      "breakpoints": true
     }
   ]
 }

@@ -134,6 +134,7 @@ export const attendance = pgTable(
     date: date('date').notNull(),
     period: drinkPeriod('period').notNull(),
     status: attendanceStatus('status').notNull().default('office'),
+    source: drinkSource('source').notNull().default('manual'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

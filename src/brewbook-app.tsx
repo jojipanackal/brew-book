@@ -1831,13 +1831,25 @@ function AdminView({
 			{adminTab === "today" && (
 				<section className="rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] p-4">
 					<h2 className="text-sm font-semibold text-[var(--c-text-dark)]">Users</h2>
-					<input
-						aria-label="Search users"
-						className="mt-3 h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-3 text-sm outline-none focus:border-[var(--c-brand-lt)]"
-						onChange={(event) => setUserSearch(event.target.value)}
-						placeholder="Search users by name or email"
-						value={userSearch}
-					/>
+					<div className="relative mt-3">
+						<input
+							aria-label="Search users"
+							className="h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-3 pr-10 text-sm outline-none focus:border-[var(--c-brand-lt)]"
+							onChange={(event) => setUserSearch(event.target.value)}
+							placeholder="Search users by name or email"
+							value={userSearch}
+						/>
+						{userSearch && (
+							<button
+								aria-label="Clear user search"
+								className="absolute right-1 top-1 grid size-8 place-items-center rounded-md text-[var(--c-text-muted)] hover:bg-[var(--c-muted)] hover:text-[var(--c-text-mid)]"
+								onClick={() => setUserSearch("")}
+								type="button"
+							>
+								<XIcon size={15} />
+							</button>
+						)}
+					</div>
 					<div className="mt-3 grid gap-3">
 						{filteredUsers.map((poll) => {
 							const rowId = poll.user.id ?? poll.user.email;
@@ -3612,13 +3624,23 @@ function DrinkInfoSheet({ drink, onClose }: { drink: Drink; onClose: () => void 
 				className="no-scrollbar relative z-10 flex h-[88svh] w-full flex-col overflow-y-auto rounded-t-3xl bg-[var(--c-card)] overscroll-contain shadow-2xl sm:h-auto sm:max-h-[88svh] sm:max-w-lg sm:rounded-2xl"
 				style={{ transform: dragY > 0 ? `translateY(${dragY}px)` : undefined, transition: dragY === 0 ? "transform 0.25s ease" : "none" }}
 			>
-				{/* Handle */}
+				{/* Drag area */}
 				<div
-					className="mx-auto mt-3 h-1 w-10 shrink-0 touch-none rounded-full bg-[var(--c-drag)] sm:hidden"
+					className="relative flex min-h-14 shrink-0 touch-none items-start justify-center px-4 pt-3"
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
 					onTouchEnd={handleTouchEnd}
-				/>
+				>
+					<div className="mt-0 h-1 w-10 rounded-full bg-[var(--c-drag)] sm:hidden" />
+					<button
+						aria-label="Close drink information"
+						className="absolute right-3 top-2 grid size-9 place-items-center rounded-full text-[var(--c-text-muted)] transition hover:bg-[var(--c-muted)] hover:text-[var(--c-text-mid)]"
+						onClick={onClose}
+						type="button"
+					>
+						<XIcon size={18} />
+					</button>
+				</div>
 
 				{/* Hero */}
 				<div className="flex flex-col items-center gap-2 bg-[var(--c-accent-bg)] px-6 py-8 text-center">
@@ -3686,13 +3708,16 @@ function PollDetailsSheet({
 	onClose: () => void;
 }) {
 	const [sourceFilter, setSourceFilter] = useState<PollSource | "all">("all");
+	const [searchQuery, setSearchQuery] = useState("");
 	const [dragY, setDragY] = useState(0);
 	const dragStart = useState<number | null>(null);
 	const periodInfo = periodDetails.find((item) => item.id === period);
-	const filteredPolls =
-		sourceFilter === "all"
-			? polls
-			: polls.filter((item) => item.sources[period] === sourceFilter);
+	const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+	const filteredPolls = polls.filter((item) => {
+		const matchesSource = sourceFilter === "all" || item.sources[period] === sourceFilter;
+		const matchesSearch = !normalizedSearchQuery || `${item.user.name} ${item.user.email}`.toLowerCase().includes(normalizedSearchQuery);
+		return matchesSource && matchesSearch;
+	});
 	const awayPolls = filteredPolls.filter((item) => item.availability[period] !== "office");
 
 	function handleTouchStart(e: React.TouchEvent) {
@@ -3730,7 +3755,7 @@ function PollDetailsSheet({
 						onTouchEnd={handleTouchEnd}
 					>
 						<div className="mx-auto mb-4 h-1 w-10 shrink-0 rounded-full bg-[var(--c-drag)] sm:hidden" />
-						<div className="flex items-start justify-between">
+						<div className="flex items-start justify-between gap-3">
 							<div>
 								<p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--c-brand-lt)]">
 									{date === todayKey ? "Today" : displayDate(date)}
@@ -3743,6 +3768,14 @@ function PollDetailsSheet({
 									{filteredPolls.length === 1 ? "response" : "responses"}
 								</p>
 							</div>
+							<button
+								aria-label="Close poll details"
+								className="grid size-9 shrink-0 place-items-center rounded-full text-[var(--c-text-muted)] transition hover:bg-[var(--c-muted)] hover:text-[var(--c-text-mid)]"
+								onClick={onClose}
+								type="button"
+							>
+								<XIcon size={18} />
+							</button>
 						</div>
 					</div>
 					<div className="mt-4 grid grid-cols-4 gap-2">
@@ -3762,15 +3795,45 @@ function PollDetailsSheet({
 							</button>
 						))}
 					</div>
+					<div className="relative mt-3">
+						<input
+							aria-label="Search poll responses"
+							className="h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-3 pr-10 text-sm outline-none focus:border-[var(--c-brand-lt)]"
+							onChange={(event) => setSearchQuery(event.target.value)}
+							placeholder="Search people by name or email"
+							value={searchQuery}
+						/>
+						{searchQuery && (
+							<button
+								aria-label="Clear poll response search"
+								className="absolute right-1 top-1 grid size-8 place-items-center rounded-md text-[var(--c-text-muted)] hover:bg-[var(--c-muted)] hover:text-[var(--c-text-mid)]"
+								onClick={() => setSearchQuery("")}
+								type="button"
+							>
+								<XIcon size={15} />
+							</button>
+						)}
+					</div>
 				</div>
 				<div className="no-scrollbar mt-4 min-h-0 flex-1 grid content-start gap-4 overflow-y-auto overscroll-contain [touch-action:pan-y]">
 					{awayPolls.length > 0 && (
 						<section>
 							<h3 className="mb-2 text-base font-semibold text-[var(--c-text-muted)]">Not ordering this round</h3>
 							<div className="grid gap-2">
-								{awayPolls.map((item) => <div className="flex items-center justify-between rounded-xl bg-[var(--c-row)] px-3 py-2.5" key={item.user.email}><span className="text-sm font-semibold">{compactName(item.user)}</span><MetaTag muted>{availabilityLabel(item.availability[period])}</MetaTag></div>)}
+								{awayPolls.map((item) => (
+									<div className="flex items-center justify-between gap-3 rounded-xl bg-[var(--c-row)] px-3 py-2.5" key={item.user.email}>
+										<span className="min-w-0 truncate text-sm font-semibold">{compactName(item.user)}</span>
+										<span className="flex shrink-0 flex-wrap justify-end gap-1">
+											<MetaTag muted>{availabilityLabel(item.availability[period])}</MetaTag>
+											<MetaTag muted>{sourceLabel(item.availabilitySources[period])}</MetaTag>
+										</span>
+									</div>
+								))}
 							</div>
 						</section>
+					)}
+					{filteredPolls.length === 0 && (
+						<p className="rounded-xl bg-[var(--c-row)] px-3 py-3 text-sm text-[var(--c-text-muted)]">No responses found.</p>
 					)}
 					{drinks.map((drink) => {
 						const drinkPolls = filteredPolls.filter(

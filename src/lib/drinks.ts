@@ -16,6 +16,7 @@ export type PollRecord = {
   sugar: SugarChoice
   sources: Record<Period, PollSource>
   availability: Record<Period, AttendanceStatus>
+  availabilitySources: Record<Period, PollSource>
 }
 export type DrinkDay = {
   date: string

@@ -59,15 +59,15 @@ export async function readDay(userId: string | undefined, date: string) {
       sugar: drinkResponse.sugar,
       source: drinkResponse.source,
     }).from(drinkResponse).innerJoin(user, eq(user.id, drinkResponse.userId)).where(companyId ? and(eq(drinkResponse.date, date), eq(user.companyId, companyId)) : eq(drinkResponse.date, date))
-  const availabilityRows = await db.select({ userId: attendance.userId, period: attendance.period, status: attendance.status })
+  const availabilityRows = await db.select({ userId: attendance.userId, period: attendance.period, status: attendance.status, source: attendance.source })
     .from(attendance).where(eq(attendance.date, date))
   const members = await db.select({ id: user.id, name: user.name, email: user.email, image: user.image })
     .from(user).where(companyId ? eq(user.companyId, companyId) : undefined)
 
-  const grouped = new Map<string, { user: { id: string; name: string; email: string; image: string | null }; choices: Partial<DrinkChoice>; sugar: Partial<SugarChoice>; sources: Partial<Record<Period, PollSource>>; availability: Partial<Record<Period, AttendanceStatus>> }>()
-  for (const member of members) grouped.set(member.id, { user: member, choices: {}, sugar: {}, sources: {}, availability: {} })
+  const grouped = new Map<string, { user: { id: string; name: string; email: string; image: string | null }; choices: Partial<DrinkChoice>; sugar: Partial<SugarChoice>; sources: Partial<Record<Period, PollSource>>; availability: Partial<Record<Period, AttendanceStatus>>; availabilitySources: Partial<Record<Period, PollSource>> }>()
+  for (const member of members) grouped.set(member.id, { user: member, choices: {}, sugar: {}, sources: {}, availability: {}, availabilitySources: {} })
   for (const row of responseRows) {
-    const existing = grouped.get(row.userId) ?? { user: { id: row.userId, name: row.name, email: row.email, image: row.image }, choices: {}, sugar: {}, sources: {}, availability: {} }
+    const existing = grouped.get(row.userId) ?? { user: { id: row.userId, name: row.name, email: row.email, image: row.image }, choices: {}, sugar: {}, sources: {}, availability: {}, availabilitySources: {} }
     existing.choices[row.period] = row.drink
     existing.sugar[row.period] = row.sugar
     existing.sources[row.period] = row.source
@@ -75,7 +75,10 @@ export async function readDay(userId: string | undefined, date: string) {
   }
   for (const row of availabilityRows) {
     const existing = grouped.get(row.userId)
-    if (existing) existing.availability[row.period] = row.status
+    if (existing) {
+      existing.availability[row.period] = row.status
+      existing.availabilitySources[row.period] = row.source
+    }
   }
 
   const defaultSettings = defaultsFromRows(defaultRows)
@@ -88,6 +91,7 @@ export async function readDay(userId: string | undefined, date: string) {
     sugar: { morning: entry.sugar.morning ?? true, evening: entry.sugar.evening ?? true },
     sources: { morning: entry.sources.morning ?? 'default', evening: entry.sources.evening ?? 'default' },
     availability,
+    availabilitySources: { morning: entry.availabilitySources.morning ?? 'manual', evening: entry.availabilitySources.evening ?? 'manual' },
   }
   }) }
 }
