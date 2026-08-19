@@ -62,21 +62,19 @@ export function cx(...classes: Array<string | false | null | undefined>) {
 }
 
 export function countChoices(entries: DrinkChoice[]) {
-	return periods.reduce(
-		(result, period) => {
-			result[period] = drinks.reduce<Record<string, number>>(
-				(counts, drink) => {
-					counts[drink] = entries.filter(
-						(entry) => entry[period] === drink,
-					).length;
-					return counts;
-				},
-				{},
-			);
-			return result;
-		},
-		{} as Record<Period, Record<string, number>>,
-	);
+	const result = {} as Record<Period, Record<string, number>>;
+	for (const period of periods) {
+		const counts: Record<string, number> = {};
+		for (const drink of drinks) counts[drink] = 0;
+		result[period] = counts;
+	}
+	for (const entry of entries) {
+		for (const period of periods) {
+			const drink = entry[period];
+			result[period][drink] = (result[period][drink] ?? 0) + 1;
+		}
+	}
+	return result;
 }
 
 export function reportSentryError(reason: unknown, fallbackMessage: string) {

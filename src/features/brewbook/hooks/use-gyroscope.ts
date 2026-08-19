@@ -7,7 +7,9 @@ export function useGyroscope() {
 	>("unknown");
 
 	useEffect(() => {
+		const hasDeviceOrientation = typeof DeviceOrientationEvent !== "undefined";
 		const needsPermission =
+			hasDeviceOrientation &&
 			typeof (
 				DeviceOrientationEvent as unknown as {
 					requestPermission?: () => Promise<string>;

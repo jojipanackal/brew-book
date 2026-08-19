@@ -51,7 +51,7 @@ import {
 initSentryClient();
 
 if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
-	void navigator.serviceWorker.register("/sw.js");
+	void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
 }
 
 const readState = () => initialState;
