@@ -42,7 +42,7 @@ COPY package.json pnpm-lock.yaml ./
 COPY scripts ./scripts
 COPY dotenvx.ts ./dotenvx.ts
 COPY src/db ./src/db
-COPY src/lib/drinks.ts src/lib/greeting.ts ./src/lib/
+COPY src/lib/drinks.ts src/lib/greeting.ts src/lib/poll-responses.ts ./src/lib/
 
 EXPOSE 3003
 

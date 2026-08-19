@@ -12,6 +12,7 @@ function json(data: unknown, init?: ResponseInit) {
 interface GetAdminResult {
   userId: string
   companyIds: string[] | null
+  companyId: string | null
 }
 
 async function getAdmin(request: Request): Promise<GetAdminResult | null> {
@@ -22,9 +23,10 @@ async function getAdmin(request: Request): Promise<GetAdminResult | null> {
     db.select({ id: user.id, role: user.role, companyId: user.companyId }).from(user).where(eq(user.id, session.user.id)).limit(1),
     db.select({ companyId: companyAdmin.companyId }).from(companyAdmin).where(eq(companyAdmin.email, normalizedEmail)),
   ])
-  if (userRow[0]?.role === 'admin') return { userId: session.user.id, companyIds: null as string[] | null }
+  const companyId = userRow[0]?.companyId ?? memberships[0]?.companyId ?? null
+  if (userRow[0]?.role === 'admin') return { userId: session.user.id, companyIds: null as string[] | null, companyId }
   if (!memberships.length) return null
-  return { userId: session.user.id, companyIds: memberships.map((item) => item.companyId) }
+  return { userId: session.user.id, companyIds: memberships.map((item) => item.companyId), companyId }
 }
 
 function isValidPhoneNumber(phoneNumber: string): boolean {
@@ -95,13 +97,12 @@ export const Route = createFileRoute('/api/cooks')({
             return json({ error: 'Invalid phone number format. Please include country code (e.g., +91 98765 43210)' }, { status: 400 })
           }
           
-          // Get the admin's company
-          if (!admin.companyIds) {
-            // Super admin doesn't have a company context for creating cooks
+          // Use the signed-in admin's company context, including for global admins.
+          if (!admin.companyId) {
             return json({ error: 'Unable to determine company for cook' }, { status: 400 })
           }
           
-          const companyId = admin.companyIds[0]
+          const companyId = admin.companyId
           const normalizedPhone = normalizePhoneNumber(phoneNumber)
           
           const cookId = crypto.randomUUID()
@@ -199,8 +200,7 @@ export const Route = createFileRoute('/api/cooks')({
             return json({ error: 'Cook not found or access denied' }, { status: 403 })
           }
           
-          // Deactivate instead of delete
-          await db.update(cook).set({ isActive: false, updatedAt: new Date() }).where(eq(cook.id, id))
+          await db.delete(cook).where(eq(cook.id, id))
           
           return json({ ok: true })
         }

@@ -1,4 +1,4 @@
-import { and, eq, gte, ne } from 'drizzle-orm'
+import { and, eq, gte } from 'drizzle-orm'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { db } from '#/db'
@@ -60,7 +60,6 @@ export const Route = createFileRoute('/api/stats')({
             and(
               eq(drinkResponse.userId, userId),
               gte(drinkResponse.date, from),
-              ne(user.isOnLeave, true),
             ),
           )
           .orderBy(drinkResponse.date)

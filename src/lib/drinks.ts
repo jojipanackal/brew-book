@@ -16,6 +16,7 @@ export type PollRecord = {
   sugar: SugarChoice
   sources: Record<Period, PollSource>
   availability: Record<Period, AttendanceStatus>
+  availabilitySources: Record<Period, PollSource>
 }
 export type DrinkDay = {
   date: string
@@ -116,6 +117,10 @@ export function updateGuestRequest(input: { type: 'approve' | 'reject' | 'remove
 
 export function updateUserResponse(input: { userId: string; period: Period; drink: Drink; sugar: boolean }) {
   return request<{ ok: true }>('/api/admin', { method: 'POST', body: JSON.stringify({ type: 'response', date: new Date().toISOString().slice(0, 10), ...input }) })
+}
+
+export function updateUserAvailability(input: { userId: string; period: Period; status: AttendanceStatus }) {
+  return request<{ ok: true }>('/api/admin', { method: 'POST', body: JSON.stringify({ type: 'availability', date: new Date().toISOString().slice(0, 10), ...input }) })
 }
 
 export type Cook = { id: string; name: string; phoneNumber: string; isActive: boolean; createdAt: Date; updatedAt: Date }

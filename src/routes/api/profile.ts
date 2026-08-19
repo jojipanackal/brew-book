@@ -139,7 +139,6 @@ export const Route = createFileRoute('/api/profile')({
           await tx.update(user).set({ company: companyName, updatedAt: new Date() }).where(eq(user.id, currentUser.id))
           for (const period of periods) {
             await tx.insert(drinkDefault).values({ userId: currentUser.id, period, drink: validatedDefaults[period], sugar: validatedSugarDefaults[period] }).onConflictDoUpdate({ target: [drinkDefault.userId, drinkDefault.period], set: { drink: validatedDefaults[period], sugar: validatedSugarDefaults[period], updatedAt: new Date() } })
-            await tx.insert(drinkResponse).values({ id: crypto.randomUUID(), userId: currentUser.id, date: todayKey(), period, drink: validatedDefaults[period], sugar: validatedSugarDefaults[period], source: 'default' }).onConflictDoUpdate({ target: [drinkResponse.userId, drinkResponse.date, drinkResponse.period], set: { drink: validatedDefaults[period], sugar: validatedSugarDefaults[period], source: 'default', updatedAt: new Date() }, where: eq(drinkResponse.source, 'default') })
           }
         })
         return json(await readProfile(currentUser))
@@ -149,8 +148,8 @@ export const Route = createFileRoute('/api/profile')({
         if (!currentUser) return json({ error: 'Unauthorized' }, { status: 401 })
         const body = await request.json() as { date?: unknown; period?: unknown; status?: unknown }
         if (!isDate(body.date) || !isPeriod(body.period) || !isAttendanceStatus(body.status)) return json({ error: 'Invalid availability' }, { status: 400 })
-        await db.insert(attendance).values({ id: crypto.randomUUID(), userId: currentUser.id, date: body.date, period: body.period, status: body.status })
-          .onConflictDoUpdate({ target: [attendance.userId, attendance.date, attendance.period], set: { status: body.status, updatedAt: new Date() } })
+        await db.insert(attendance).values({ id: crypto.randomUUID(), userId: currentUser.id, date: body.date, period: body.period, status: body.status, source: 'manual' })
+          .onConflictDoUpdate({ target: [attendance.userId, attendance.date, attendance.period], set: { status: body.status, source: 'manual', updatedAt: new Date() } })
         if (body.status !== 'office') {
           await db.insert(drinkResponse).values({ id: crypto.randomUUID(), userId: currentUser.id, date: body.date, period: body.period, drink: 'No drink', sugar: true, source: 'manual' }).onConflictDoUpdate({ target: [drinkResponse.userId, drinkResponse.date, drinkResponse.period], set: { drink: 'No drink', sugar: true, source: 'manual', updatedAt: new Date() } })
         }
