@@ -531,7 +531,7 @@ export function PollDetailsSheet({
 				aria-label="Close poll details"
 			/>
 			<section
-				className="relative z-10 flex h-[88svh] min-h-0 w-full flex-col rounded-t-3xl bg-[var(--c-card)] px-4 pb-6 pt-3 shadow-2xl overscroll-contain sm:h-auto sm:max-h-[88svh] sm:max-w-lg sm:rounded-2xl sm:p-6"
+				className="relative z-10 flex h-[75dvh] max-h-[75dvh] min-h-0 w-full flex-col rounded-t-3xl bg-[var(--c-card)] px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl overscroll-contain sm:h-auto sm:max-h-[88svh] sm:max-w-lg sm:rounded-2xl sm:p-6"
 				style={{
 					transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
 					transition: dragY === 0 ? "transform 0.25s ease" : "none",
