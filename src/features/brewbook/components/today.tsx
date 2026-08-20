@@ -1,13 +1,14 @@
 import {
 	CalendarOff,
 	Check,
-	ChevronDown,
 	Coffee,
 	Eye,
 	Info,
+	X as XIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
+	Banner,
 	Button,
 	Card,
 	IconButton,
@@ -17,6 +18,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 	Spinner,
+	Switch,
 } from "#/components/ui";
 import {
 	type AttendanceStatus,
@@ -207,52 +209,166 @@ function AvailabilityControl({
 	const visiblePeriods = periods.filter((period) =>
 		period === "morning" ? nowIST < 11 * 60 : nowIST < 15 * 60 + 15,
 	);
+	const hasMultiplePeriods = periods.length > 1;
+
+	const [open, setOpen] = useState(false);
+	const [halfDay, setHalfDay] = useState(false);
+	const [pending, setPending] = useState<
+		Array<{ period: Period; status: AttendanceStatus }>
+	>([]);
+
+	useEffect(() => {
+		if (!open) setPending([]);
+	}, [open]);
+
+	useEffect(() => {
+		if (!open || loading !== null || pending.length === 0) return;
+		const next = pending[0];
+		setPending((q) => q.slice(1));
+		onChange?.(next.period, next.status);
+	}, [open, loading, pending, onChange]);
+
 	if (visiblePeriods.length === 0) return null;
+
+	function handleOpen() {
+		setHalfDay(
+			hasMultiplePeriods && availability.morning !== availability.evening,
+		);
+		setOpen(true);
+	}
+
+	function setPeriodStatus(period: Period, status: AttendanceStatus) {
+		onChange?.(period, status);
+	}
+
+	function setFullDayStatus(status: AttendanceStatus) {
+		if (visiblePeriods.length === 0) return;
+		setPeriodStatus(visiblePeriods[0], status);
+		if (visiblePeriods.length > 1) {
+			setPending([{ period: visiblePeriods[1], status }]);
+		}
+	}
+
 	return (
-		<details className="group rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] px-4 py-3 shadow-[0_8px_30px_rgba(77,57,38,0.03)]">
-			<summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-[var(--c-text-mid)]">
-				<span className="flex items-center gap-2.5">
-					<CalendarOff size={17} className="text-[var(--c-brand-lt)]" />
-					Mark your absence
-				</span>
-				<ChevronDown
-					size={17}
-					className="text-[var(--c-text-muted)] transition-transform group-open:rotate-180"
-				/>
-			</summary>
-			<div className="mt-3 grid gap-3 border-t border-[var(--c-border-2)] pt-3 sm:grid-cols-2">
-				{visiblePeriods.map((period) => (
-					<label
-						key={period}
-						htmlFor={period}
-						className="grid gap-1.5 text-xs font-semibold text-[var(--c-text-muted)]"
-					>
-						<span>{period === "morning" ? "Morning" : "Evening"}</span>
-						<Select
-							disabled={loading !== null}
-							value={availability[period]}
-							onValueChange={(value) =>
-								onChange?.(period, value as AttendanceStatus)
-							}
-						>
-							<SelectTrigger id={period} className="px-2">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								{(Object.keys(labels) as AttendanceStatus[]).map((status) => (
-									<SelectItem key={status} value={status}>
-										{labels[status]}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-						{loading === period && (
-							<Spinner className="size-4 text-[var(--c-brand-lt)]" />
+		<>
+			<Button
+				type="button"
+				variant="primary"
+				fullWidth
+				onClick={handleOpen}
+				className="gap-2"
+			>
+				<CalendarOff size={17} />
+				Mark your absence
+			</Button>
+			{open && (
+				<div className="fixed inset-0 z-40 flex items-center justify-center overscroll-none bg-[var(--c-text)]/10 p-4">
+					<button
+						type="button"
+						className="absolute inset-0 cursor-default bg-[var(--c-text)]/30"
+						onClick={() => setOpen(false)}
+						aria-label="Close"
+					/>
+					<section className="relative z-10 w-full max-w-md rounded-2xl bg-[var(--c-card)] p-5 shadow-2xl">
+						<div className="mb-4 flex items-center justify-between">
+							<h2 className="font-serif text-lg font-semibold text-[var(--c-text-dark)]">
+								Mark your absence
+							</h2>
+							<button
+								type="button"
+								className="grid size-9 place-items-center rounded-full text-[var(--c-text-muted)] transition hover:bg-[var(--c-muted)] hover:text-[var(--c-text-mid)]"
+								onClick={() => setOpen(false)}
+								aria-label="Close"
+							>
+								<XIcon size={18} />
+							</button>
+						</div>
+						{hasMultiplePeriods && (
+							<label
+								htmlFor="leave-halfday"
+								className="mb-4 flex items-center justify-between gap-3 text-sm font-semibold text-[var(--c-text-mid)]"
+							>
+								<span>Half day</span>
+								<Switch
+									id="leave-halfday"
+									checked={halfDay}
+									onCheckedChange={setHalfDay}
+									disabled={loading !== null}
+								/>
+							</label>
 						)}
-					</label>
-				))}
-			</div>
-		</details>
+						<div className="grid gap-3">
+							{halfDay ? (
+								periods.map((period) => (
+									<label
+										key={period}
+										htmlFor={`leave-${period}`}
+										className="grid gap-1.5 text-xs font-semibold text-[var(--c-text-muted)]"
+									>
+										<span>{period === "morning" ? "Morning" : "Evening"}</span>
+										<Select
+											disabled={
+												loading !== null || !visiblePeriods.includes(period)
+											}
+											value={availability[period]}
+											onValueChange={(value) =>
+												setPeriodStatus(period, value as AttendanceStatus)
+											}
+										>
+											<SelectTrigger id={`leave-${period}`} className="px-2">
+												<SelectValue />
+											</SelectTrigger>
+											<SelectContent>
+												{(Object.keys(labels) as AttendanceStatus[]).map(
+													(status) => (
+														<SelectItem key={status} value={status}>
+															{labels[status]}
+														</SelectItem>
+													),
+												)}
+											</SelectContent>
+										</Select>
+										{loading === period && (
+											<Spinner className="size-4 text-[var(--c-brand-lt)]" />
+										)}
+									</label>
+								))
+							) : (
+								<label
+									htmlFor="leave-full"
+									className="grid gap-1.5 text-xs font-semibold text-[var(--c-text-muted)]"
+								>
+									<span>Full day</span>
+									<Select
+										disabled={loading !== null}
+										value={availability[visiblePeriods[0]]}
+										onValueChange={(value) =>
+											setFullDayStatus(value as AttendanceStatus)
+										}
+									>
+										<SelectTrigger id="leave-full" className="px-2">
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											{(Object.keys(labels) as AttendanceStatus[]).map(
+												(status) => (
+													<SelectItem key={status} value={status}>
+														{labels[status]}
+													</SelectItem>
+												),
+											)}
+										</SelectContent>
+									</Select>
+									{loading !== null && (
+										<Spinner className="size-4 text-[var(--c-brand-lt)]" />
+									)}
+								</label>
+							)}
+						</div>
+					</section>
+				</div>
+			)}
+		</>
 	);
 }
 
@@ -314,22 +430,9 @@ function DrinkPoll({
 				/>
 			</div>
 			{closed && (
-				<div
-					className={cx(
-						"flex items-center gap-2 border-b px-4 py-2.5 text-xs font-semibold sm:px-5",
-						pollUpcoming
-							? "border-green-200 bg-green-50 text-green-700"
-							: "border-red-200 bg-red-50 text-red-700",
-					)}
-				>
-					<span
-						className={cx(
-							"size-1.5 rounded-full",
-							pollUpcoming ? "bg-green-600" : "bg-red-600",
-						)}
-					/>
+				<Banner variant={pollUpcoming ? "success" : "error"} dot>
 					{closedMessage}
-				</div>
+				</Banner>
 			)}
 			<div className="grid gap-2 p-3 sm:p-4">
 				{drinks.map((drink) => {
@@ -385,6 +488,7 @@ function DrinkPoll({
 			</div>
 			{onOpen && (
 				<Button
+					variant="secondary"
 					className="mx-3 mb-3 w-[calc(100%-1.5rem)] sm:mx-4 sm:mb-4 sm:w-[calc(100%-2rem)]"
 					onClick={onOpen}
 					type="button"

@@ -21,6 +21,7 @@ const buttonVariants = cva(
 					"border border-[var(--c-border)] bg-transparent text-[var(--c-text-err)] hover:bg-[var(--c-err-bg)]",
 				danger:
 					"border border-[var(--c-border)] bg-transparent text-[var(--c-text-err)] hover:bg-[var(--c-err-bg)]",
+				link: "h-auto min-h-0 inline rounded-none border-0 bg-transparent p-0 text-[var(--c-text-muted)] underline decoration-[var(--c-text-dim)] underline-offset-4 hover:text-[var(--c-brand)]",
 				cream:
 					"bg-[var(--c-cream)] text-[var(--c-brand)] shadow-[0_12px_30px_rgba(38,24,16,0.22)] hover:bg-white",
 				green: "rounded-lg bg-green-500 text-white hover:bg-green-600",

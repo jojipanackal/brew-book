@@ -195,21 +195,21 @@ export function SignInPage({
 					Continue with Google
 					<ArrowRight size={17} />
 				</Button>
-				<button
+				<Button
 					onClick={onGuest}
-					type="button"
-					className="mt-3 text-sm font-semibold text-[#e7d8c4] underline decoration-[#c9ad90] underline-offset-4"
+					variant="link"
+					className="mt-3 text-[#e7d8c4] decoration-[#c9ad90]"
 				>
 					Continue as guest
-				</button>
+				</Button>
 				{onLocalSignUp && (
-					<button
+					<Button
 						onClick={onLocalSignUp}
-						type="button"
-						className="mt-2 text-xs font-semibold text-[#e7d8c4] underline decoration-[#c9ad90] underline-offset-4"
+						variant="link"
+						className="mt-2 text-xs text-[#e7d8c4] decoration-[#c9ad90]"
 					>
 						Sign up locally
-					</button>
+					</Button>
 				)}
 			</section>
 		</main>

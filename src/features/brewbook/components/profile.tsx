@@ -11,6 +11,7 @@ import {
 import { useState } from "react";
 import {
 	Button,
+	CalendarDay,
 	Card,
 	Empty,
 	IconButton,
@@ -332,24 +333,22 @@ function MiniCalendar({
 					cell.day === null ? (
 						<span key={cell.key} />
 					) : (
-						<button
+						<CalendarDay
 							key={cell.key}
-							type="button"
 							disabled={cell.disabled}
 							onClick={() => cell.key && onSelect(cell.key)}
-							className={cx(
-								"mx-auto flex size-8 items-center justify-center rounded-full text-xs font-semibold transition",
+							state={
 								cell.isSelected
-									? "bg-[var(--c-brand)] text-white"
+									? "selected"
 									: cell.isToday
-										? "bg-[var(--c-accent-bg)] text-[var(--c-brand)]"
+										? "today"
 										: cell.disabled
-											? "text-[var(--c-text-dim)] opacity-30"
-											: "text-[var(--c-text)] hover:bg-[var(--c-muted)]",
-							)}
+											? "disabled"
+											: "default"
+							}
 						>
 							{cell.day}
-						</button>
+						</CalendarDay>
 					),
 				)}
 			</div>

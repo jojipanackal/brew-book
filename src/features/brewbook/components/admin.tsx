@@ -569,14 +569,16 @@ function SendToCookModal({
 					>
 						Back
 					</Button>
-					<a
-						href={whatsappUrl}
-						target="_blank"
-						rel="noopener noreferrer"
-						className="flex-1 rounded-lg bg-green-500 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-green-600 no-underline"
+					<Button
+						asChild
+						variant="green"
+						size="sm"
+						className="flex-1 text-sm no-underline"
 					>
-						Open WhatsApp
-					</a>
+						<a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
+							Open WhatsApp
+						</a>
+					</Button>
 				</div>
 			</Card>
 		</div>
@@ -828,7 +830,7 @@ function AdminResponseRow({
 		);
 	};
 	return (
-		<ListRow className="py-3">
+		<ListRow className="flex-col items-stretch py-3">
 			<Button
 				onClick={onToggle}
 				type="button"
@@ -926,7 +928,9 @@ function AdminPeriodControl({
 				value={drink}
 				onValueChange={(value) => onDrinkChange(value as Drink)}
 			>
-				<SelectTrigger className="mt-2" />
+				<SelectTrigger className="mt-2">
+					<SelectValue />
+				</SelectTrigger>
 				<SelectContent>
 					{drinks.map((item) => (
 						<SelectItem value={item} key={item}>
