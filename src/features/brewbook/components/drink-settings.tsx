@@ -1,7 +1,9 @@
 import { Check, Coffee } from "lucide-react";
+import { Button, Card } from "#/components/ui";
 import { type Drink, drinks, type Period } from "#/lib/drinks";
 import { cx } from "../utils";
 import { SugarToggle } from "./common";
+
 export function DefaultDrinkSetting({
 	period,
 	selected,
@@ -16,7 +18,7 @@ export function DefaultDrinkSetting({
 	onToggleSugar: (sugar: boolean) => void;
 }) {
 	return (
-		<section className="rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] p-4 shadow-[0_8px_30px_rgba(77,57,38,0.04)] sm:p-5">
+		<Card className="p-4 sm:p-5">
 			<div className="flex items-start justify-between gap-3">
 				<div className="flex items-start gap-3">
 					<span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[var(--c-muted)] text-[var(--c-brand-lt)]">
@@ -35,22 +37,24 @@ export function DefaultDrinkSetting({
 			</div>
 			<div className="mt-4 grid grid-cols-1 gap-2">
 				{drinks.map((drink) => (
-					<button
+					<Button
 						key={drink}
 						onClick={() => onSelect(drink)}
 						type="button"
+						variant="outline"
+						fullWidth
 						className={cx(
-							"flex min-h-11 items-center justify-between rounded-xl border px-3 text-left text-sm font-semibold transition",
+							"min-h-11 justify-between text-left",
 							selected === drink
 								? "border-[var(--c-brand-lt)] bg-[var(--c-accent-bg)] text-[var(--c-text-mid)]"
-								: "border-[var(--c-border-2)] text-[var(--c-text-soft)] hover:border-[var(--c-border-3)]",
+								: "",
 						)}
 					>
 						{drink}
 						{selected === drink && <Check size={15} />}
-					</button>
+					</Button>
 				))}
 			</div>
-		</section>
+		</Card>
 	);
 }

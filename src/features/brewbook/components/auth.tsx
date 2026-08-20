@@ -1,5 +1,6 @@
 import { ArrowLeft, ArrowRight, Check, Coffee } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Alert, Button, Input, Spinner } from "#/components/ui";
 import {
 	type Company,
 	type CompanyRecord,
@@ -11,6 +12,7 @@ import type { OnboardingState } from "../types";
 import { cx, pickRandom } from "../utils";
 import { SugarToggle } from "./common";
 import { BrandMark } from "./navigation";
+
 export function GuestSetupPage({
 	onSubmit,
 	onBack,
@@ -40,81 +42,86 @@ export function GuestSetupPage({
 					{step === "name" ? "What is your name?" : "Choose your company"}
 				</h1>
 				{error && (
-					<p
-						className="mt-4 rounded-xl border border-[var(--c-border-err)] bg-[var(--c-err-bg)] px-3 py-2 text-sm text-[var(--c-text-err)]"
-						role="alert"
-					>
+					<Alert className="mt-4" role="alert">
 						{error}
-					</p>
+					</Alert>
 				)}
 				{step === "name" ? (
 					<>
-						<label className="mt-7 block text-sm font-semibold text-[var(--c-text-dark)]">
+						<label
+							htmlFor="guest-name"
+							className="mt-7 block text-sm font-semibold text-[var(--c-text-dark)]"
+						>
 							Name
-							<input
-								className="mt-2 h-12 w-full rounded-xl border border-[var(--c-border)] bg-[var(--c-card)] px-3 text-sm outline-none transition focus:border-[var(--c-brand-lt)]"
+							<Input
+								id="guest-name"
+								className="mt-2 h-12"
 								onChange={(event) => setName(event.target.value)}
 								placeholder="Your name"
 								value={name}
 							/>
 						</label>
 						<div className="mt-7 flex gap-2">
-							<button
+							<Button
 								onClick={back}
 								type="button"
-								className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--c-border)] px-3 text-sm font-semibold text-[var(--c-text-mid)]"
+								variant="secondary"
+								className="flex-1"
 							>
 								<ArrowLeft size={16} />
 								Back
-							</button>
-							<button
+							</Button>
+							<Button
 								disabled={name.trim().length < 2}
 								onClick={() => setStep("company")}
 								type="button"
-								className="flex min-h-11 flex-[1.5] items-center justify-center gap-2 rounded-xl bg-[var(--c-brand)] px-3 text-sm font-semibold text-white transition hover:bg-[var(--c-text-mid)] disabled:cursor-not-allowed disabled:opacity-45"
+								className="flex-[1.5]"
 							>
 								Next
 								<ArrowRight size={16} />
-							</button>
+							</Button>
 						</div>
 					</>
 				) : (
 					<>
 						<div className="mt-7 grid gap-2">
 							{companies.map((item) => (
-								<button
+								<Button
 									key={item.id}
 									onClick={() => setCompany(item.name)}
 									type="button"
+									variant="outline"
+									fullWidth
 									className={cx(
-										"flex min-h-12 items-center justify-between rounded-xl border px-3 text-left text-sm font-semibold transition",
+										"min-h-12 justify-between text-left",
 										company === item.name
 											? "border-[var(--c-brand-lt)] bg-[var(--c-accent-bg)] text-[var(--c-text-mid)]"
-											: "border-[var(--c-border-2)] text-[var(--c-text-soft)] hover:border-[var(--c-border-3)]",
+											: "",
 									)}
 								>
 									{item.name}
 									{company === item.name && <Check size={16} />}
-								</button>
+								</Button>
 							))}
 						</div>
 						<div className="mt-7 flex gap-2">
-							<button
+							<Button
 								onClick={back}
 								type="button"
-								className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--c-border)] px-3 text-sm font-semibold text-[var(--c-text-mid)]"
+								variant="secondary"
+								className="flex-1"
 							>
 								<ArrowLeft size={16} />
 								Back
-							</button>
-							<button
+							</Button>
+							<Button
 								disabled={!company}
 								onClick={() => onSubmit(name.trim(), company)}
 								type="button"
-								className="min-h-11 flex-[1.5] rounded-xl bg-[var(--c-brand)] px-3 text-sm font-semibold text-white transition hover:bg-[var(--c-text-mid)] disabled:cursor-not-allowed disabled:opacity-45"
+								className="flex-[1.5]"
 							>
 								Request access
-							</button>
+							</Button>
 						</div>
 					</>
 				)}
@@ -128,15 +135,13 @@ export function AuthLoading({ message }: { message?: string }) {
 	return (
 		<main className="grid min-h-svh place-items-center bg-[var(--c-page)]">
 			<div className="flex flex-col items-center gap-4">
-				<output
-					aria-label={msg}
-					className="size-10 animate-spin rounded-full border-2 border-[var(--c-border)] border-t-[var(--c-brand)]"
-				/>
+				<Spinner />
 				<p className="text-sm text-[var(--c-text-muted)]">{msg}</p>
 			</div>
 		</main>
 	);
 }
+
 export function SignInPage({
 	signIn,
 	onGuest,
@@ -179,30 +184,32 @@ export function SignInPage({
 				<p className="mt-4 max-w-xs text-[15px] leading-6 text-[#e7d8c4]">
 					Use your work email to continue.
 				</p>
-				<button
+				<Button
 					onClick={signIn}
 					type="button"
-					className="mt-8 flex h-12 w-full items-center justify-center gap-3 rounded-xl bg-[var(--c-cream)] text-sm font-semibold text-[var(--c-brand)] shadow-[0_12px_30px_rgba(38,24,16,0.22)] transition hover:bg-white"
+					variant="cream"
+					fullWidth
+					className="mt-8 gap-3"
 				>
 					<img alt="" className="size-5" src="/google-g.png" />
 					Continue with Google
 					<ArrowRight size={17} />
-				</button>
-				<button
+				</Button>
+				<Button
 					onClick={onGuest}
-					type="button"
-					className="mt-3 text-sm font-semibold text-[#e7d8c4] underline decoration-[#c9ad90] underline-offset-4"
+					variant="link"
+					className="mt-3 text-[#e7d8c4] decoration-[#c9ad90]"
 				>
 					Continue as guest
-				</button>
+				</Button>
 				{onLocalSignUp && (
-					<button
+					<Button
 						onClick={onLocalSignUp}
-						type="button"
-						className="mt-2 text-xs font-semibold text-[#e7d8c4] underline decoration-[#c9ad90] underline-offset-4"
+						variant="link"
+						className="mt-2 text-xs text-[#e7d8c4] decoration-[#c9ad90]"
 					>
 						Sign up locally
-					</button>
+					</Button>
 				)}
 			</section>
 		</main>
@@ -232,18 +239,15 @@ export function AccessDeniedPage({
 						Back to BrewBook
 					</a>
 				) : (
-					<button
-						onClick={onSignOut}
-						type="button"
-						className="mt-7 min-h-11 rounded-xl bg-[var(--c-brand)] px-5 text-sm font-semibold text-white"
-					>
+					<Button onClick={onSignOut} type="button" className="mt-7">
 						Sign out
-					</button>
+					</Button>
 				)}
 			</section>
 		</main>
 	);
 }
+
 export function GuestPendingPage({ onExit }: { onExit: () => void }) {
 	return (
 		<main className="grid min-h-svh place-items-center bg-[var(--c-page)] px-5 text-[var(--c-text-dark)]">
@@ -253,17 +257,19 @@ export function GuestPendingPage({ onExit }: { onExit: () => void }) {
 					A company admin needs to approve your guest request before you can
 					join today’s polls.
 				</p>
-				<button
+				<Button
 					onClick={onExit}
 					type="button"
-					className="mt-7 min-h-11 rounded-xl border border-[var(--c-border)] px-5 text-sm font-semibold text-[var(--c-text-mid)]"
+					variant="secondary"
+					className="mt-7"
 				>
 					Exit guest access
-				</button>
+				</Button>
 			</section>
 		</main>
 	);
 }
+
 export function GuestRejectedPage({ onExit }: { onExit: () => void }) {
 	return (
 		<main className="grid min-h-svh place-items-center bg-[var(--c-page)] px-5 text-[var(--c-text-dark)]">
@@ -272,13 +278,14 @@ export function GuestRejectedPage({ onExit }: { onExit: () => void }) {
 				<p className="mt-3 text-sm leading-6 text-[var(--c-text-muted)]">
 					Ask the company admin to approve your guest access.
 				</p>
-				<button
+				<Button
 					onClick={onExit}
 					type="button"
-					className="mt-7 min-h-11 rounded-xl border border-[var(--c-border)] px-5 text-sm font-semibold text-[var(--c-text-mid)]"
+					variant="secondary"
+					className="mt-7"
 				>
 					Exit guest access
-				</button>
+				</Button>
 			</section>
 		</main>
 	);
@@ -327,16 +334,13 @@ export function OnboardingPage({
 						/>
 					</div>
 					{error && (
-						<p
-							className="mt-3 rounded-xl border border-[var(--c-border-err)] bg-[var(--c-err-bg)] px-3 py-2 text-sm text-[var(--c-text-err)]"
-							role="alert"
-						>
+						<Alert className="mt-3" role="alert">
 							{error}
-						</p>
+						</Alert>
 					)}
 					<div className="mt-5 grid grid-cols-1 gap-2">
 						{drinks.map((drink) => (
-							<button
+							<Button
 								key={drink}
 								onClick={() =>
 									setState({
@@ -345,42 +349,46 @@ export function OnboardingPage({
 									})
 								}
 								type="button"
+								variant="outline"
+								fullWidth
 								className={cx(
-									"flex min-h-12 min-w-0 items-center justify-between rounded-xl border px-3 text-left text-sm font-semibold transition",
+									"min-h-12 justify-between text-left",
 									state.defaults[period.id] === drink
 										? "border-[var(--c-brand-lt)] bg-[var(--c-accent-bg)] text-[var(--c-text-mid)]"
-										: "border-[var(--c-border-2)] text-[var(--c-text-soft)] hover:border-[var(--c-border-3)]",
+										: "",
 								)}
 							>
 								{drink}
 								{state.defaults[period.id] === drink && <Check size={15} />}
-							</button>
+							</Button>
 						))}
 					</div>
 					<div className="mt-8 flex gap-2">
-						<button
+						<Button
 							onClick={back}
 							type="button"
-							className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--c-border)] px-3 text-sm font-semibold text-[var(--c-text-mid)]"
+							variant="secondary"
+							className="flex-1"
 						>
 							<ArrowLeft size={16} />
 							Back
-						</button>
-						<button
+						</Button>
+						<Button
 							disabled={!state.defaults[period.id]}
 							onClick={next}
 							type="button"
-							className="flex min-h-11 flex-[1.5] items-center justify-center gap-2 rounded-xl bg-[var(--c-brand)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--c-text-mid)] disabled:cursor-not-allowed disabled:opacity-45"
+							className="flex-[1.5]"
 						>
 							{state.step === "evening" ? "Finish setup" : "Next"}
 							<ArrowRight size={17} />
-						</button>
+						</Button>
 					</div>
 				</section>
 			</div>
 		</main>
 	);
 }
+
 export function LocalSetupComplete({ onReset }: { onReset: () => void }) {
 	return (
 		<main className="grid min-h-svh place-items-center bg-[var(--c-page)] px-5 py-10 text-[var(--c-text-dark)]">
@@ -393,13 +401,9 @@ export function LocalSetupComplete({ onReset }: { onReset: () => void }) {
 					The local test flow is complete. The app is not loaded in local signup
 					mode.
 				</p>
-				<button
-					onClick={onReset}
-					type="button"
-					className="mt-7 min-h-11 rounded-xl bg-[var(--c-brand)] px-4 text-sm font-semibold text-white"
-				>
+				<Button onClick={onReset} type="button" className="mt-7">
 					Run setup again
-				</button>
+				</Button>
 			</section>
 		</main>
 	);
