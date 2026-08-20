@@ -4,12 +4,20 @@ import {
 	CalendarDays,
 	ChevronRight,
 	Coffee,
-	Loader2,
 	LogOut,
 	Moon,
 	Sun,
 } from "lucide-react";
 import { useState } from "react";
+import {
+	Button,
+	Card,
+	Empty,
+	IconButton,
+	ListRow,
+	Spinner,
+	Switch,
+} from "#/components/ui";
 import {
 	type Drink,
 	type DrinkChoice,
@@ -24,6 +32,7 @@ import { periodDetails, todayKey } from "../constants";
 import { compactName, cx, displayDate, initials, sourceLabel } from "../utils";
 import { MetaTag, PageHeader } from "./common";
 import { DefaultDrinkSetting } from "./drink-settings";
+
 export function ProfileView({
 	user,
 	defaults,
@@ -61,15 +70,16 @@ export function ProfileView({
 			<PageHeader eyebrow="Account" title="Profile" />
 
 			{/* User card */}
-			<section className="rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] shadow-[0_8px_30px_rgba(77,57,38,0.04)]">
+			<Card className="shadow-[0_8px_30px_rgba(77,57,38,0.04)]">
 				<div className="flex items-center gap-4 p-4">
-					<button
+					<Button
 						type="button"
 						onClick={tapAvatar}
-						className="grid size-14 shrink-0 place-items-center rounded-full bg-[var(--c-brand-pale)] text-lg font-semibold text-[var(--c-brand)]"
+						variant="ghost"
+						className="size-14 shrink-0 rounded-full bg-[var(--c-brand-pale)] p-0 text-lg font-semibold text-[var(--c-brand)]"
 					>
 						{initials(user.name)}
-					</button>
+					</Button>
 					<div className="min-w-0">
 						<p className="truncate font-semibold text-[var(--c-text-dark)]">
 							{user.name}
@@ -87,32 +97,22 @@ export function ProfileView({
 							{dark ? <Moon size={15} /> : <Sun size={15} />}
 							{dark ? "Dark mode" : "Light mode"}
 						</span>
-						<button
-							type="button"
-							onClick={onToggleTheme}
+						<Switch
+							checked={dark}
+							onChange={onToggleTheme}
 							aria-label="Toggle theme"
-							aria-pressed={dark}
-							className="relative h-6 w-11 rounded-full transition-colors duration-200"
-							style={{
-								background: dark ? "var(--c-brand)" : "var(--c-toggle-off)",
-							}}
-						>
-							<span
-								className={cx(
-									"absolute top-1 size-4 rounded-full bg-[var(--c-cream)] shadow transition-all duration-200",
-									dark ? "left-6" : "left-1",
-								)}
-							/>
-						</button>
+						/>
 					</div>
 
 					{/* Drink defaults row */}
 					{!isGuest && (
 						<>
-							<button
+							<Button
 								type="button"
 								onClick={() => setDefaultsOpen((o) => !o)}
-								className="flex w-full items-center justify-between border-t border-[var(--c-border)] px-4 py-3.5 text-sm font-semibold text-[var(--c-text-mid)] transition hover:bg-[var(--c-muted)]"
+								variant="ghost"
+								fullWidth
+								className="items-center justify-between rounded-none border-t border-[var(--c-border)] px-4 py-3.5 text-left text-sm font-semibold text-[var(--c-text-mid)]"
 							>
 								<span className="flex items-center gap-2.5">
 									<Coffee size={15} />
@@ -125,7 +125,7 @@ export function ProfileView({
 										defaultsOpen && "rotate-90",
 									)}
 								/>
-							</button>
+							</Button>
 							{defaultsOpen && (
 								<div className="grid gap-3 border-t border-[var(--c-border)] px-4 py-4">
 									{periodDetails.map((period) => (
@@ -152,10 +152,12 @@ export function ProfileView({
 					)}
 
 					{/* History row */}
-					<button
+					<Button
 						type="button"
 						onClick={() => setHistoryOpen((o) => !o)}
-						className="flex w-full items-center justify-between border-t border-[var(--c-border)] px-4 py-3.5 text-sm font-semibold text-[var(--c-text-mid)] transition hover:bg-[var(--c-muted)]"
+						variant="ghost"
+						fullWidth
+						className="items-center justify-between rounded-none border-t border-[var(--c-border)] px-4 py-3.5 text-left text-sm font-semibold text-[var(--c-text-mid)]"
 					>
 						<span className="flex items-center gap-2.5">
 							<CalendarDays size={15} />
@@ -168,7 +170,7 @@ export function ProfileView({
 								historyOpen && "rotate-90",
 							)}
 						/>
-					</button>
+					</Button>
 					{historyOpen && (
 						<div className="border-t border-[var(--c-border)]">
 							<HistoryView
@@ -198,16 +200,18 @@ export function ProfileView({
 						Contribute on GitHub
 					</a>
 					{/* Sign out row */}
-					<button
+					<Button
 						onClick={onSignOut}
 						type="button"
-						className="flex w-full items-center gap-2.5 border-t border-[var(--c-border)] px-4 py-3.5 text-sm font-semibold text-[var(--c-text-err)] transition hover:bg-[var(--c-err-bg)]"
+						variant="danger"
+						fullWidth
+						className="items-center gap-2.5 rounded-none border-0 border-t border-[var(--c-border)] px-4 py-3.5 text-left text-sm"
 					>
 						<LogOut size={15} />
 						Sign out
-					</button>
+					</Button>
 				</div>
-			</section>
+			</Card>
 		</div>
 	);
 }
@@ -284,26 +288,26 @@ function MiniCalendar({
 	}
 
 	return (
-		<div className="rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] p-4 shadow-[0_8px_30px_rgba(77,57,38,0.04)]">
+		<Card className="p-4">
 			<div className="mb-3 flex items-center justify-between">
-				<button
-					type="button"
+				<IconButton
 					onClick={prevMonth}
-					className="grid size-8 place-items-center rounded-lg text-[var(--c-text-muted)] transition hover:bg-[var(--c-muted)]"
+					className="size-8"
+					aria-label="Previous month"
 				>
 					<ArrowLeft size={14} />
-				</button>
+				</IconButton>
 				<span className="text-sm font-semibold text-[var(--c-text-dark)]">
 					{monthName}
 				</span>
-				<button
-					type="button"
+				<IconButton
 					onClick={nextMonth}
 					disabled={!canNext}
-					className="grid size-8 place-items-center rounded-lg text-[var(--c-text-muted)] transition hover:bg-[var(--c-muted)] disabled:opacity-30"
+					className="size-8"
+					aria-label="Next month"
 				>
 					<ArrowRight size={14} />
-				</button>
+				</IconButton>
 			</div>
 			<div className="mb-1 grid grid-cols-7 text-center">
 				{[
@@ -349,7 +353,7 @@ function MiniCalendar({
 					),
 				)}
 			</div>
-		</div>
+		</Card>
 	);
 }
 
@@ -379,10 +383,7 @@ function HistoryView({
 			<MiniCalendar selected={date} onSelect={setDate} />
 			{loading ? (
 				<div className="flex items-center justify-center py-8">
-					<Loader2
-						size={24}
-						className="animate-spin text-[var(--c-brand-lt)]"
-					/>
+					<Spinner className="size-6" />
 				</div>
 			) : (
 				<HistoryResponseCards polls={polls} />
@@ -390,6 +391,7 @@ function HistoryView({
 		</div>
 	);
 }
+
 function HistoryResponseCards({ polls }: { polls: PollRecord[] }) {
 	const [openDrink, setOpenDrink] = useState<Drink | null>(null);
 	const rows = drinks
@@ -407,27 +409,21 @@ function HistoryResponseCards({ polls }: { polls: PollRecord[] }) {
 			),
 		}))
 		.filter((group) => group.entries.length > 0);
-	if (!polls.length)
-		return (
-			<div className="rounded-2xl border border-dashed border-[var(--c-empty)] bg-[var(--c-card)] px-4 py-8 text-center text-sm text-[var(--c-text-muted)]">
-				No responses for this day.
-			</div>
-		);
+	if (!polls.length) return <Empty>No responses for this day.</Empty>;
 	return (
 		<div className="grid gap-3">
 			{rows.map((group) => (
-				<article
-					className="overflow-hidden rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] shadow-[0_8px_30px_rgba(77,57,38,0.04)]"
-					key={group.drink}
-				>
-					<button
+				<Card className="overflow-hidden" key={group.drink}>
+					<Button
 						onClick={() =>
 							setOpenDrink((current) =>
 								current === group.drink ? null : group.drink,
 							)
 						}
 						type="button"
-						className="flex min-h-14 w-full items-center justify-between gap-3 px-4 text-left"
+						variant="ghost"
+						fullWidth
+						className="min-h-14 items-center justify-between gap-3 px-4 text-left"
 					>
 						<span className="text-sm font-semibold text-[var(--c-text-dark)]">
 							{group.drink}
@@ -435,14 +431,11 @@ function HistoryResponseCards({ polls }: { polls: PollRecord[] }) {
 						<span className="text-xs font-semibold text-[var(--c-text-muted)]">
 							{group.entries.length}
 						</span>
-					</button>
+					</Button>
 					{openDrink === group.drink && (
 						<div className="grid gap-2 border-t border-[var(--c-border-2)] p-3">
 							{group.entries.map((entry) => (
-								<div
-									className="flex items-center justify-between gap-3 rounded-xl bg-[var(--c-row)] px-3 py-2.5"
-									key={`${entry.user.email}-${entry.period}`}
-								>
+								<ListRow key={`${entry.user.email}-${entry.period}`}>
 									<div className="flex min-w-0 items-center gap-2.5">
 										<span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--c-avatar)] text-[11px] font-semibold text-[var(--c-text-mid)]">
 											{initials(compactName(entry.user))}
@@ -460,11 +453,11 @@ function HistoryResponseCards({ polls }: { polls: PollRecord[] }) {
 										<MetaTag>{entry.sugar ? "Sugar" : "No sugar"}</MetaTag>
 										<MetaTag muted>{sourceLabel(entry.source)}</MetaTag>
 									</span>
-								</div>
+								</ListRow>
 							))}
 						</div>
 					)}
-				</article>
+				</Card>
 			))}
 		</div>
 	);

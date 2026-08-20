@@ -5,9 +5,19 @@ import {
 	Coffee,
 	Eye,
 	Info,
-	Loader2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import {
+	Button,
+	Card,
+	IconButton,
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+	Spinner,
+} from "#/components/ui";
 import {
 	type AttendanceStatus,
 	type Drink,
@@ -22,6 +32,7 @@ import { periodDetails, todayKey } from "../constants";
 import { countChoices, cx, displayDate } from "../utils";
 import { PageHeader, SugarToggle } from "./common";
 import { DrinkInfoSheet } from "./overlays";
+
 export function TodayView({
 	entry,
 	sugar,
@@ -120,7 +131,7 @@ export function TodayView({
 		<div className="grid gap-5">
 			<PageHeader
 				eyebrow={displayDate(todayKey)}
-				title={pianoMode ? "🎹 Piano Mode" : "Today"}
+				title={pianoMode ? "Piano Mode" : "Today"}
 				action={pianoMode ? "tap to play" : `${todayPolls.length} people`}
 			/>
 			{!guest && (
@@ -176,6 +187,7 @@ export function TodayView({
 		</div>
 	);
 }
+
 function AvailabilityControl({
 	availability,
 	loading,
@@ -212,28 +224,30 @@ function AvailabilityControl({
 				{visiblePeriods.map((period) => (
 					<label
 						key={period}
+						htmlFor={period}
 						className="grid gap-1.5 text-xs font-semibold text-[var(--c-text-muted)]"
 					>
 						<span>{period === "morning" ? "Morning" : "Evening"}</span>
-						<select
-							className="h-10 rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-2 text-sm font-semibold text-[var(--c-text-mid)]"
+						<Select
 							disabled={loading !== null}
 							value={availability[period]}
-							onChange={(event) =>
-								onChange?.(period, event.target.value as AttendanceStatus)
+							onValueChange={(value) =>
+								onChange?.(period, value as AttendanceStatus)
 							}
 						>
-							{(Object.keys(labels) as AttendanceStatus[]).map((status) => (
-								<option key={status} value={status}>
-									{labels[status]}
-								</option>
-							))}
-						</select>
+							<SelectTrigger id={period} className="px-2">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{(Object.keys(labels) as AttendanceStatus[]).map((status) => (
+									<SelectItem key={status} value={status}>
+										{labels[status]}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
 						{loading === period && (
-							<Loader2
-								size={14}
-								className="animate-spin text-[var(--c-brand-lt)]"
-							/>
+							<Spinner className="size-4 text-[var(--c-brand-lt)]" />
 						)}
 					</label>
 				))}
@@ -241,6 +255,7 @@ function AvailabilityControl({
 		</details>
 	);
 }
+
 function DrinkPoll({
 	period,
 	closed = false,
@@ -275,7 +290,7 @@ function DrinkPoll({
 	const [infoDrink, setInfoDrink] = useState<Drink | null>(null);
 	const pollUpcoming = closedMessage.startsWith("Poll opens");
 	return (
-		<div className="overflow-hidden rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] shadow-[0_8px_30px_rgba(77,57,38,0.04)]">
+		<Card className="overflow-hidden">
 			<div className="flex items-center justify-between gap-4 border-b border-[var(--c-border-2)] px-4 py-3.5 sm:px-5">
 				<span className="flex items-center gap-2.5">
 					<span className="grid size-8 place-items-center rounded-lg bg-[var(--c-muted)] text-[var(--c-brand-lt)]">
@@ -322,18 +337,19 @@ function DrinkPoll({
 					const percent = total ? Math.round((counts[drink] / total) * 100) : 0;
 					return (
 						<div key={drink} className="flex items-center gap-1">
-							<button
+							<Button
 								disabled={!editable}
 								onClick={() => onSelect?.(drink)}
 								type="button"
+								variant="outline"
 								className={cx(
-									"relative flex min-h-11 flex-1 items-center justify-between overflow-hidden rounded-xl border px-3.5 text-left text-sm font-semibold",
+									"relative min-h-11 flex-1 items-center justify-between overflow-hidden text-left",
 									editable
-										? "transition hover:border-[var(--c-border-3)]"
+										? "hover:border-[var(--c-border-3)]"
 										: "cursor-default",
 									selected === drink
 										? "border-[var(--c-brand-lt)] bg-[var(--c-accent-bg)] text-[var(--c-text-mid)]"
-										: "border-[var(--c-border-2)] text-[var(--c-text-soft)]",
+										: "",
 								)}
 							>
 								<span
@@ -355,33 +371,32 @@ function DrinkPoll({
 										</span>
 									)}
 								</span>
-							</button>
-							<button
-								type="button"
+							</Button>
+							<IconButton
 								onClick={() => setInfoDrink(drink)}
-								className="grid size-7 shrink-0 place-items-center rounded-lg text-[var(--c-text-dim)] opacity-60 transition hover:bg-[var(--c-muted)] hover:opacity-100"
+								className="size-7 shrink-0 opacity-60 hover:opacity-100"
 								aria-label={`Info about ${drink}`}
 							>
 								<Info size={14} />
-							</button>
+							</IconButton>
 						</div>
 					);
 				})}
 			</div>
 			{onOpen && (
-				<button
-					className="mx-3 mb-3 flex min-h-11 w-[calc(100%-1.5rem)] items-center justify-center gap-2 rounded-xl bg-[var(--c-brand)] text-sm font-semibold text-white transition hover:bg-[var(--c-text-mid)] sm:mx-4 sm:mb-4 sm:w-[calc(100%-2rem)]"
+				<Button
+					className="mx-3 mb-3 w-[calc(100%-1.5rem)] sm:mx-4 sm:mb-4 sm:w-[calc(100%-2rem)]"
 					onClick={onOpen}
 					type="button"
 				>
 					<Eye size={16} />
 					View details
-				</button>
+				</Button>
 			)}
 			{infoDrink && (
 				<DrinkInfoSheet drink={infoDrink} onClose={() => setInfoDrink(null)} />
 			)}
-		</div>
+		</Card>
 	);
 }
 

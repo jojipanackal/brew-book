@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Badge } from "#/components/ui";
 import { cx } from "../utils";
 
 export function MetaTag({
@@ -8,18 +9,7 @@ export function MetaTag({
 	children: ReactNode;
 	muted?: boolean;
 }) {
-	return (
-		<span
-			className={cx(
-				"inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-4",
-				muted
-					? "border-[var(--c-border)] bg-[var(--c-card)] text-[var(--c-text-muted)]"
-					: "border-[var(--c-border-3)] bg-[var(--c-accent-bg)] text-[var(--c-text-mid)]",
-			)}
-		>
-			{children}
-		</span>
-	);
+	return <Badge variant={muted ? "muted" : "default"}>{children}</Badge>;
 }
 
 export function PageHeader({

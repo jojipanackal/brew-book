@@ -1,6 +1,20 @@
 import { ChevronRight, X as XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
+	Alert,
+	Button,
+	Card,
+	Empty,
+	IconButton,
+	Input,
+	ListRow,
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "#/components/ui";
+import {
 	type AdminDashboard,
 	type AttendanceStatus,
 	type Cook,
@@ -50,10 +64,7 @@ function AdminResultsView({
 				);
 
 				return (
-					<section
-						key={period}
-						className="rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] p-4"
-					>
+					<Card className="p-4" key={period}>
 						<div className="flex items-center justify-between gap-3">
 							<div>
 								<h2 className="text-sm font-semibold text-[var(--c-text-dark)]">
@@ -66,13 +77,13 @@ function AdminResultsView({
 								</p>
 							</div>
 							{hasDrinks && cooks.length > 0 && (
-								<button
+								<Button
 									onClick={() => onSendToCook(period, results)}
 									type="button"
-									className="shrink-0 rounded-lg bg-[var(--c-brand)] px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
+									size="sm"
 								>
 									Send to Cook
-								</button>
+								</Button>
 							)}
 						</div>
 
@@ -83,26 +94,23 @@ function AdminResultsView({
 									.map(
 										([drink, count]) =>
 											count > 0 && (
-												<div
-													key={drink}
-													className="flex items-center justify-between rounded-lg bg-[var(--c-row)] px-3 py-2"
-												>
+												<ListRow key={drink} className="rounded-lg py-2">
 													<span className="text-sm text-[var(--c-text-mid)]">
 														{drink}
 													</span>
 													<span className="font-semibold text-[var(--c-brand)]">
 														{count}
 													</span>
-												</div>
+												</ListRow>
 											),
 									)}
 							</div>
 						) : (
-							<p className="mt-3 text-xs text-[var(--c-text-muted)]">
+							<Empty className="mt-4 py-4 text-xs">
 								No responses have been recorded for this poll.
-							</p>
+							</Empty>
 						)}
-					</section>
+					</Card>
 				);
 			})}
 		</div>
@@ -132,18 +140,14 @@ function AdminCooksView({
 }) {
 	return (
 		<div className="grid gap-4">
-			<section className="rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] p-4">
+			<Card className="p-4">
 				<div className="flex items-center justify-between gap-3">
 					<h2 className="text-sm font-semibold text-[var(--c-text-dark)]">
 						Cooks
 					</h2>
-					<button
-						onClick={onShowAdd}
-						type="button"
-						className="rounded-lg bg-[var(--c-brand)] px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
-					>
+					<Button onClick={onShowAdd} type="button" size="sm">
 						+ Add Cook
-					</button>
+					</Button>
 				</div>
 
 				{loading ? (
@@ -151,45 +155,38 @@ function AdminCooksView({
 						Loading cooks...
 					</div>
 				) : cooks.length === 0 ? (
-					<div className="mt-4 text-center text-xs text-[var(--c-text-muted)]">
-						No cooks added yet
-					</div>
+					<Empty className="mt-4 py-4 text-xs">No cooks added yet</Empty>
 				) : (
 					<div className="mt-3 space-y-2">
 						{cooks.map((cook) => (
-							<div
+							<ListRow
 								key={cook.id}
 								className={cx(
-									"rounded-lg px-3 py-3",
-									cook.isActive
-										? "bg-[var(--c-row)]"
-										: "bg-[var(--c-muted)] opacity-60",
+									"rounded-lg py-3",
+									!cook.isActive && "bg-[var(--c-muted)] opacity-60",
 								)}
 							>
-								<div className="flex items-center justify-between gap-3">
-									<div className="min-w-0">
-										<p className="truncate text-sm font-semibold">
-											{cook.name}
-										</p>
-										<p className="mt-1 truncate text-xs text-[var(--c-text-muted)]">
-											+{cook.phoneNumber}
-										</p>
-									</div>
-									<div className="flex shrink-0 gap-2">
-										<button
-											onClick={() => onEdit(cook)}
-											type="button"
-											className="rounded-lg border border-[var(--c-border)] px-3 py-2 text-xs font-semibold text-[var(--c-text-mid)] hover:bg-[var(--c-card)]"
-										>
-											Edit
-										</button>
-									</div>
+								<div className="min-w-0">
+									<p className="truncate text-sm font-semibold">{cook.name}</p>
+									<p className="mt-1 truncate text-xs text-[var(--c-text-muted)]">
+										+{cook.phoneNumber}
+									</p>
 								</div>
-							</div>
+								<div className="flex shrink-0 gap-2">
+									<Button
+										onClick={() => onEdit(cook)}
+										type="button"
+										variant="secondary"
+										size="sm"
+									>
+										Edit
+									</Button>
+								</div>
+							</ListRow>
 						))}
 					</div>
 				)}
-			</section>
+			</Card>
 
 			{showAddCook && (
 				<AddCookModal onClose={onCloseAdd} onRefresh={onRefresh} />
@@ -243,7 +240,7 @@ function AddCookModal({
 
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-			<div className="w-full max-w-md rounded-2xl bg-[var(--c-card)] p-6">
+			<Card className="w-full max-w-md p-6">
 				<h2 className="text-lg font-semibold text-[var(--c-text-dark)]">
 					Add Cook
 				</h2>
@@ -256,13 +253,13 @@ function AddCookModal({
 						>
 							Name
 						</label>
-						<input
+						<Input
 							id="add-cook-name"
 							type="text"
 							value={name}
 							onChange={(e) => setName(e.target.value)}
 							placeholder="Cook name"
-							className="mt-1 h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-3 text-sm text-[var(--c-text-dark)]"
+							className="mt-1"
 						/>
 					</div>
 
@@ -273,45 +270,42 @@ function AddCookModal({
 						>
 							Phone Number
 						</label>
-						<input
+						<Input
 							id="add-cook-phone"
 							type="text"
 							value={phone}
 							onChange={(e) => setPhone(e.target.value)}
 							placeholder="+91 98765 43210"
-							className="mt-1 h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-3 text-sm text-[var(--c-text-dark)]"
+							className="mt-1"
 						/>
 						<p className="mt-1 text-xs text-[var(--c-text-muted)]">
 							Include country code (e.g., +91 for India)
 						</p>
 					</div>
 
-					{error && (
-						<div className="rounded-lg bg-red-50 p-3 text-xs text-red-700">
-							{error}
-						</div>
-					)}
+					{error && <Alert className="mt-2 text-xs">{error}</Alert>}
 				</div>
 
 				<div className="mt-6 flex gap-3">
-					<button
+					<Button
 						onClick={onClose}
 						type="button"
+						variant="secondary"
 						disabled={saving}
-						className="flex-1 rounded-lg border border-[var(--c-border)] px-3 py-2 text-sm font-semibold text-[var(--c-text-mid)] hover:bg-[var(--c-muted)]"
+						className="flex-1"
 					>
 						Cancel
-					</button>
-					<button
+					</Button>
+					<Button
 						onClick={handleSubmit}
 						type="button"
 						disabled={saving}
-						className="flex-1 rounded-lg bg-[var(--c-brand)] px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+						className="flex-1"
 					>
 						{saving ? "Saving..." : "Add"}
-					</button>
+					</Button>
 				</div>
-			</div>
+			</Card>
 		</div>
 	);
 }
@@ -367,7 +361,7 @@ function EditCookModal({
 
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-			<div className="w-full max-w-md rounded-2xl bg-[var(--c-card)] p-6">
+			<Card className="w-full max-w-md p-6">
 				<h2 className="text-lg font-semibold text-[var(--c-text-dark)]">
 					Edit Cook
 				</h2>
@@ -380,12 +374,12 @@ function EditCookModal({
 						>
 							Name
 						</label>
-						<input
+						<Input
 							id="edit-cook-name"
 							type="text"
 							value={name}
 							onChange={(e) => setName(e.target.value)}
-							className="mt-1 h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-3 text-sm text-[var(--c-text-dark)]"
+							className="mt-1"
 						/>
 					</div>
 
@@ -396,19 +390,23 @@ function EditCookModal({
 						>
 							Phone Number
 						</label>
-						<input
+						<Input
 							id="edit-cook-phone"
 							type="text"
 							value={phone}
 							onChange={(e) => setPhone(e.target.value)}
-							className="mt-1 h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-3 text-sm text-[var(--c-text-dark)]"
+							className="mt-1"
 						/>
 					</div>
 
-					<div className="flex items-center gap-3 rounded-lg bg-[var(--c-row)] p-3">
-						<label className="flex flex-1 cursor-pointer items-center gap-3">
+					<ListRow className="rounded-lg py-3">
+						<label
+							htmlFor="edit-cook-active"
+							className="flex flex-1 cursor-pointer items-center gap-3"
+						>
 							<input
 								type="checkbox"
+								id="edit-cook-active"
 								checked={isActive}
 								onChange={(e) => setIsActive(e.target.checked)}
 								className="h-4 w-4"
@@ -417,34 +415,31 @@ function EditCookModal({
 								Active
 							</span>
 						</label>
-					</div>
+					</ListRow>
 
-					{error && (
-						<div className="rounded-lg bg-red-50 p-3 text-xs text-red-700">
-							{error}
-						</div>
-					)}
+					{error && <Alert className="mt-2 text-xs">{error}</Alert>}
 				</div>
 
 				<div className="mt-6 flex gap-3">
-					<button
+					<Button
 						onClick={onClose}
 						type="button"
+						variant="secondary"
 						disabled={saving}
-						className="flex-1 rounded-lg border border-[var(--c-border)] px-3 py-2 text-sm font-semibold text-[var(--c-text-mid)] hover:bg-[var(--c-muted)]"
+						className="flex-1"
 					>
 						Cancel
-					</button>
-					<button
+					</Button>
+					<Button
 						onClick={handleSubmit}
 						type="button"
 						disabled={saving}
-						className="flex-1 rounded-lg bg-[var(--c-brand)] px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+						className="flex-1"
 					>
 						{saving ? "Saving..." : "Save"}
-					</button>
+					</Button>
 				</div>
-			</div>
+			</Card>
 		</div>
 	);
 }
@@ -478,7 +473,7 @@ function SendToCookModal({
 	if (step === "select" || !selectedCook) {
 		return (
 			<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-				<div className="w-full max-w-md rounded-2xl bg-[var(--c-card)] p-6">
+				<Card className="w-full max-w-md p-6">
 					<h2 className="text-lg font-semibold text-[var(--c-text-dark)]">
 						Send Poll Result
 					</h2>
@@ -487,25 +482,25 @@ function SendToCookModal({
 					</p>
 
 					{cooks.length === 0 ? (
-						<div className="mt-4 rounded-lg bg-amber-50 p-3">
-							<p className="text-sm text-amber-900">
-								No cooks have been added yet.
-							</p>
-							<p className="mt-2 text-xs text-amber-800">
+						<Alert className="mt-4 text-sm" variant="warning">
+							<p>No cooks have been added yet.</p>
+							<p className="mt-2 text-xs">
 								Add a cook from Admin → Cooks to send poll results.
 							</p>
-						</div>
+						</Alert>
 					) : (
 						<div className="mt-4 space-y-2">
 							{cooks.map((cook) => (
-								<button
+								<Button
 									key={cook.id}
 									onClick={() => {
 										onSelectCook(cook);
 										setStep("preview");
 									}}
 									type="button"
-									className="w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-row)] px-3 py-3 text-left transition hover:bg-[var(--c-card)]"
+									variant="ghost"
+									fullWidth
+									className="items-start justify-between rounded-lg border border-[var(--c-border)] bg-[var(--c-row)] px-3 py-3 text-left hover:bg-[var(--c-card)]"
 								>
 									<p className="font-semibold text-[var(--c-text-dark)]">
 										{cook.name}
@@ -513,28 +508,29 @@ function SendToCookModal({
 									<p className="mt-1 text-xs text-[var(--c-text-muted)]">
 										+{cook.phoneNumber}
 									</p>
-								</button>
+								</Button>
 							))}
 						</div>
 					)}
 
 					<div className="mt-6 flex gap-3">
-						<button
+						<Button
 							onClick={onClose}
 							type="button"
-							className="flex-1 rounded-lg border border-[var(--c-border)] px-3 py-2 text-sm font-semibold text-[var(--c-text-mid)] hover:bg-[var(--c-muted)]"
+							variant="secondary"
+							className="flex-1"
 						>
 							Close
-						</button>
+						</Button>
 					</div>
-				</div>
+				</Card>
 			</div>
 		);
 	}
 
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-			<div className="w-full max-w-md rounded-2xl bg-[var(--c-card)] p-6">
+			<Card className="w-full max-w-md p-6">
 				<h2 className="text-lg font-semibold text-[var(--c-text-dark)]">
 					Send to Cook
 				</h2>
@@ -544,14 +540,14 @@ function SendToCookModal({
 						<p className="text-xs font-semibold text-[var(--c-text-mid)]">
 							Cook
 						</p>
-						<div className="mt-2 rounded-lg bg-[var(--c-row)] p-3">
+						<ListRow className="mt-2 rounded-lg py-3">
 							<p className="font-semibold text-[var(--c-text-dark)]">
 								{selectedCook.name}
 							</p>
 							<p className="mt-1 text-sm text-[var(--c-text-muted)]">
 								+{selectedCook.phoneNumber}
 							</p>
-						</div>
+						</ListRow>
 					</div>
 
 					<div>
@@ -565,13 +561,14 @@ function SendToCookModal({
 				</div>
 
 				<div className="mt-6 flex gap-3">
-					<button
+					<Button
 						onClick={() => setStep("select")}
 						type="button"
-						className="flex-1 rounded-lg border border-[var(--c-border)] px-3 py-2 text-sm font-semibold text-[var(--c-text-mid)] hover:bg-[var(--c-muted)]"
+						variant="secondary"
+						className="flex-1"
 					>
 						Back
-					</button>
+					</Button>
 					<a
 						href={whatsappUrl}
 						target="_blank"
@@ -581,7 +578,7 @@ function SendToCookModal({
 						Open WhatsApp
 					</a>
 				</div>
-			</div>
+			</Card>
 		</div>
 	);
 }
@@ -644,34 +641,27 @@ export function AdminView({
 					{ id: "results", label: "Results" },
 					{ id: "cooks", label: "Cooks" },
 				].map((tab) => (
-					<button
+					<Button
 						key={tab.id}
 						onClick={() => setAdminTab(tab.id as typeof adminTab)}
 						type="button"
-						className={cx(
-							"flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition",
-							adminTab === tab.id
-								? "bg-[var(--c-brand)] text-white"
-								: "text-[var(--c-text-muted)] hover:text-[var(--c-text-mid)]",
-						)}
+						variant={adminTab === tab.id ? "primary" : "ghost"}
+						className="flex-1"
 					>
 						{tab.label}
-					</button>
+					</Button>
 				))}
 			</div>
 
 			{/* Guest Requests (always shown) */}
 			{data.pendingGuests.length > 0 && (
-				<section className="rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] p-4">
+				<Card className="p-4">
 					<h2 className="text-sm font-semibold text-[var(--c-text-dark)]">
 						Guest requests
 					</h2>
 					<div className="mt-3 grid gap-2">
 						{data.pendingGuests.map((guest) => (
-							<div
-								className="flex items-center justify-between gap-3 rounded-xl bg-[var(--c-row)] px-3 py-3"
-								key={guest.id}
-							>
+							<ListRow key={guest.id} className="py-3">
 								<div className="min-w-0">
 									<p className="truncate text-sm font-semibold">{guest.name}</p>
 									<p className="text-xs text-[var(--c-text-muted)]">
@@ -679,7 +669,7 @@ export function AdminView({
 									</p>
 								</div>
 								<div className="flex shrink-0 gap-2">
-									<button
+									<Button
 										onClick={() =>
 											void updateGuestRequest({
 												type: "reject",
@@ -687,11 +677,13 @@ export function AdminView({
 											}).then(onRefresh)
 										}
 										type="button"
-										className="min-h-9 rounded-lg border border-[var(--c-border)] px-3 text-xs font-semibold text-[var(--c-text-mid)]"
+										variant="secondary"
+										size="sm"
+										className="min-h-9"
 									>
 										Decline
-									</button>
-									<button
+									</Button>
+									<Button
 										onClick={() =>
 											void updateGuestRequest({
 												type: "approve",
@@ -699,40 +691,40 @@ export function AdminView({
 											}).then(onRefresh)
 										}
 										type="button"
-										className="min-h-9 rounded-lg bg-[var(--c-brand)] px-3 text-xs font-semibold text-white"
+										size="sm"
+										className="min-h-9"
 									>
 										Approve
-									</button>
+									</Button>
 								</div>
-							</div>
+							</ListRow>
 						))}
 					</div>
-				</section>
+				</Card>
 			)}
 
 			{/* Today's Choices Tab */}
 			{adminTab === "today" && (
-				<section className="rounded-2xl border border-[var(--c-border)] bg-[var(--c-card)] p-4">
+				<Card className="p-4">
 					<h2 className="text-sm font-semibold text-[var(--c-text-dark)]">
 						Users
 					</h2>
 					<div className="relative mt-3">
-						<input
+						<Input
 							aria-label="Search users"
-							className="h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-3 pr-10 text-sm outline-none focus:border-[var(--c-brand-lt)]"
+							className="pr-10"
 							onChange={(event) => setUserSearch(event.target.value)}
 							placeholder="Search users by name or email"
 							value={userSearch}
 						/>
 						{userSearch && (
-							<button
-								aria-label="Clear user search"
-								className="absolute right-1 top-1 grid size-8 place-items-center rounded-md text-[var(--c-text-muted)] hover:bg-[var(--c-muted)]"
+							<IconButton
+								className="absolute right-1 top-1 size-8"
 								onClick={() => setUserSearch("")}
-								type="button"
+								aria-label="Clear user search"
 							>
 								<XIcon size={15} />
-							</button>
+							</IconButton>
 						)}
 					</div>
 					<div className="mt-3 grid gap-3">
@@ -758,7 +750,7 @@ export function AdminView({
 							</p>
 						)}
 					</div>
-				</section>
+				</Card>
 			)}
 
 			{/* Results Tab */}
@@ -808,6 +800,7 @@ export function AdminView({
 		</div>
 	);
 }
+
 function AdminResponseRow({
 	poll,
 	expanded,
@@ -835,11 +828,13 @@ function AdminResponseRow({
 		);
 	};
 	return (
-		<article className="rounded-xl bg-[var(--c-row)] p-3">
-			<button
+		<ListRow className="py-3">
+			<Button
 				onClick={onToggle}
 				type="button"
-				className="flex min-h-10 w-full items-center justify-between gap-3 text-left"
+				variant="ghost"
+				fullWidth
+				className="min-h-10 items-center justify-between gap-3 text-left"
 			>
 				<div className="min-w-0">
 					<p className="truncate text-sm font-semibold">
@@ -856,7 +851,7 @@ function AdminResponseRow({
 					)}
 					size={16}
 				/>
-			</button>
+			</Button>
 			{expanded && (
 				<div className="mt-3 border-t border-[var(--c-border)] pt-3">
 					<div className="grid gap-3 sm:grid-cols-2">
@@ -884,19 +879,22 @@ function AdminResponseRow({
 						))}
 					</div>
 					{isGuestUser(poll.user) && (
-						<button
+						<Button
 							onClick={removeGuest}
 							type="button"
-							className="mt-3 min-h-9 rounded-lg border border-[var(--c-border-err)] px-3 text-xs font-semibold text-[var(--c-text-err)]"
+							variant="danger"
+							size="sm"
+							className="mt-3 min-h-9"
 						>
 							Remove guest
-						</button>
+						</Button>
 					)}
 				</div>
 			)}
-		</article>
+		</ListRow>
 	);
 }
+
 function AdminPeriodControl({
 	period,
 	drink,
@@ -917,36 +915,50 @@ function AdminPeriodControl({
 	onAvailabilityChange: (status: AttendanceStatus) => void;
 }) {
 	return (
-		<section className="rounded-xl border border-[var(--c-border-2)] bg-[var(--c-card)] p-3">
+		<Card variant="accent" className="p-3">
 			<div className="flex items-center justify-between gap-3">
 				<h3 className="text-xs font-semibold text-[var(--c-text-muted)]">
 					{period === "morning" ? "Morning" : "Evening"}
 				</h3>
 				<MetaTag muted>{sourceLabel(source)}</MetaTag>
 			</div>
-			<select
-				className="mt-2 h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-2 text-sm font-semibold text-[var(--c-text-mid)]"
-				onChange={(event) => onDrinkChange(event.target.value as Drink)}
+			<Select
 				value={drink}
+				onValueChange={(value) => onDrinkChange(value as Drink)}
 			>
-				{drinks.map((item) => (
-					<option key={item}>{item}</option>
-				))}
-			</select>
-			<label className="mt-2 block text-[11px] font-semibold text-[var(--c-text-muted)]">
+				<SelectTrigger className="mt-2" />
+				<SelectContent>
+					{drinks.map((item) => (
+						<SelectItem value={item} key={item}>
+							{item}
+						</SelectItem>
+					))}
+				</SelectContent>
+			</Select>
+			<label
+				htmlFor="attendance"
+				className="mt-2 block text-[11px] font-semibold text-[var(--c-text-muted)]"
+			>
 				Attendance
-				<select
-					aria-label={`${period} attendance`}
-					className="mt-1 h-9 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-2 text-xs font-semibold text-[var(--c-text-mid)]"
-					onChange={(event) =>
-						onAvailabilityChange(event.target.value as AttendanceStatus)
-					}
+				<Select
 					value={availability}
+					onValueChange={(value) =>
+						onAvailabilityChange(value as AttendanceStatus)
+					}
 				>
-					<option value="office">In office</option>
-					<option value="wfh">Working from home</option>
-					<option value="leave">On leave</option>
-				</select>
+					<SelectTrigger
+						id="attendance"
+						aria-label={`${period} attendance`}
+						className="mt-1 h-9 text-xs"
+					>
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="office">In office</SelectItem>
+						<SelectItem value="wfh">Working from home</SelectItem>
+						<SelectItem value="leave">On leave</SelectItem>
+					</SelectContent>
+				</Select>
 			</label>
 			<div className="mt-3 flex min-h-7 items-center justify-between gap-3">
 				<SugarToggle
@@ -956,6 +968,6 @@ function AdminPeriodControl({
 					onChange={onSugarChange}
 				/>
 			</div>
-		</section>
+		</Card>
 	);
 }

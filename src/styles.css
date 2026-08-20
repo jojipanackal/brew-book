@@ -1,5 +1,27 @@
 @import "tailwindcss";
 
+@theme inline {
+	--color-background: var(--c-page);
+	--color-foreground: var(--c-text);
+	--color-card: var(--c-card);
+	--color-card-foreground: var(--c-text);
+	--color-popover: var(--c-card);
+	--color-popover-foreground: var(--c-text);
+	--color-primary: var(--c-brand);
+	--color-primary-foreground: var(--c-cream);
+	--color-secondary: var(--c-muted);
+	--color-secondary-foreground: var(--c-text-mid);
+	--color-muted: var(--c-muted);
+	--color-muted-foreground: var(--c-text-muted);
+	--color-accent: var(--c-accent-bg);
+	--color-accent-foreground: var(--c-text);
+	--color-destructive: var(--c-text-err);
+	--color-destructive-foreground: var(--c-cream);
+	--color-border: var(--c-border);
+	--color-input: var(--c-border);
+	--color-ring: var(--c-brand-lt);
+}
+
 :root {
   /* backgrounds */
   --c-page:       #f6f5f1;
