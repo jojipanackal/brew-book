@@ -54,8 +54,8 @@ export function SugarToggle({
 		<SwitchField
 			label="Sugar Free"
 			description={!compact ? (sugar ? "Off" : "On") : undefined}
-			checked={sugar}
-			onChange={onChange}
+			checked={!sugar}
+			onChange={(sugarFree) => onChange(!sugarFree)}
 			disabled={disabled}
 			compact={compact}
 		/>

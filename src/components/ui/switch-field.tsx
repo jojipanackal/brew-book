@@ -49,8 +49,8 @@ function SwitchField({
 			</span>
 			<Switch
 				id={id}
-				checked={!checked}
-				onChange={(next) => onChange(!next)}
+				checked={checked}
+				onChange={onChange}
 				disabled={disabled}
 			/>
 		</label>
