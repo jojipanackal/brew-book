@@ -1,4 +1,4 @@
-import { ChevronRight, X as XIcon } from "lucide-react";
+import { ChevronRight, Trash2, X as XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
 	Alert,
@@ -13,6 +13,7 @@ import {
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
+	SwitchField,
 } from "#/components/ui";
 import {
 	type AdminDashboard,
@@ -21,6 +22,7 @@ import {
 	calculatePollResults,
 	createCook,
 	type Drink,
+	deleteUser,
 	drinks,
 	formatPollResultsMessage,
 	generateWhatsAppUrl,
@@ -33,6 +35,7 @@ import {
 	updateCook,
 	updateGuestRequest,
 	updateUserAvailability,
+	updateUserLeave,
 	updateUserResponse,
 } from "#/lib/drinks";
 import { brewingMessages } from "../constants";
@@ -737,6 +740,7 @@ export function AdminView({
 									expanded={openUserId === rowId}
 									key={rowId}
 									poll={poll}
+									date={data.date}
 									onRefresh={onRefresh}
 									onToggle={() =>
 										setOpenUserId((current) =>
@@ -805,15 +809,23 @@ export function AdminView({
 
 function AdminResponseRow({
 	poll,
+	date,
 	expanded,
 	onToggle,
 	onRefresh,
 }: {
 	poll: PollRecord;
+	date: string;
 	expanded: boolean;
 	onToggle: () => void;
 	onRefresh: () => void;
 }) {
+	const [leaveSaving, setLeaveSaving] = useState<"full" | Period | null>(null);
+	const [deleteSaving, setDeleteSaving] = useState(false);
+	const [actionError, setActionError] = useState("");
+	const fullDayLeave = periods.every(
+		(period) => poll.availability[period] === "leave",
+	);
 	const update = (period: Period, drink: Drink, sugar = poll.sugar[period]) => {
 		if (!poll.user.id) return;
 		void updateUserResponse({
@@ -821,7 +833,49 @@ function AdminResponseRow({
 			period,
 			drink,
 			sugar: drink === "No drink" ? true : sugar,
+			date,
 		}).then(onRefresh);
+	};
+	const updateLeave = (
+		leavePeriods: Period[],
+		onLeave: boolean,
+		key: "full" | Period,
+	) => {
+		if (!poll.user.id) return;
+		setActionError("");
+		setLeaveSaving(key);
+		void updateUserLeave({
+			userId: poll.user.id,
+			date,
+			periods: leavePeriods,
+			onLeave,
+		})
+			.then(onRefresh)
+			.catch((err) =>
+				setActionError(
+					err instanceof Error ? err.message : "Failed to update leave",
+				),
+			)
+			.finally(() => setLeaveSaving(null));
+	};
+	const removeUser = () => {
+		if (
+			!poll.user.id ||
+			!window.confirm(
+				`Delete ${poll.user.name}? This permanently removes their account and poll history.`,
+			)
+		)
+			return;
+		setActionError("");
+		setDeleteSaving(true);
+		void deleteUser(poll.user.id)
+			.then(onRefresh)
+			.catch((err) =>
+				setActionError(
+					err instanceof Error ? err.message : "Failed to delete user",
+				),
+			)
+			.finally(() => setDeleteSaving(false));
 	};
 	const removeGuest = () => {
 		if (!poll.user.id) return;
@@ -856,6 +910,17 @@ function AdminResponseRow({
 			</Button>
 			{expanded && (
 				<div className="mt-3 border-t border-[var(--c-border)] pt-3">
+					<AdminLeaveControls
+						availability={poll.availability}
+						fullDayLeave={fullDayLeave}
+						onFullDayChange={(onLeave) =>
+							updateLeave([...periods], onLeave, "full")
+						}
+						onPeriodChange={(period, onLeave) =>
+							updateLeave([period], onLeave, period)
+						}
+						saving={leaveSaving}
+					/>
 					<div className="grid gap-3 sm:grid-cols-2">
 						{periods.map((period) => (
 							<AdminPeriodControl
@@ -874,12 +939,14 @@ function AdminResponseRow({
 										userId: poll.user.id,
 										period,
 										status,
+										date,
 									}).then(onRefresh);
 								}}
 								availability={poll.availability[period]}
 							/>
 						))}
 					</div>
+					{actionError && <Alert className="mt-3 text-xs">{actionError}</Alert>}
 					{isGuestUser(poll.user) && (
 						<Button
 							onClick={removeGuest}
@@ -891,9 +958,66 @@ function AdminResponseRow({
 							Remove guest
 						</Button>
 					)}
+					{!isGuestUser(poll.user) && (
+						<Button
+							onClick={removeUser}
+							type="button"
+							variant="danger"
+							size="sm"
+							className="mt-3 min-h-9"
+							disabled={deleteSaving || leaveSaving !== null}
+						>
+							<Trash2 size={14} />
+							{deleteSaving ? "Deleting..." : "Delete user"}
+						</Button>
+					)}
 				</div>
 			)}
 		</ListRow>
+	);
+}
+
+function AdminLeaveControls({
+	availability,
+	fullDayLeave,
+	onFullDayChange,
+	onPeriodChange,
+	saving,
+}: {
+	availability: Record<Period, AttendanceStatus>;
+	fullDayLeave: boolean;
+	onFullDayChange: (onLeave: boolean) => void;
+	onPeriodChange: (period: Period, onLeave: boolean) => void;
+	saving: "full" | Period | null;
+}) {
+	return (
+		<div className="mb-3">
+			<SwitchField
+				label="Full-day leave"
+				description="Mark both morning and evening as leave"
+				checked={fullDayLeave}
+				onChange={onFullDayChange}
+				disabled={saving !== null}
+			/>
+			<div className="mt-3">
+				<p className="text-[11px] font-semibold text-[var(--c-text-muted)]">
+					Half-day leave
+				</p>
+				<div className="mt-1 grid grid-cols-2 gap-2">
+					{periods.map((period) => (
+						<SwitchField
+							key={period}
+							label={period === "morning" ? "Morning" : "Evening"}
+							checked={availability[period] === "leave"}
+							onChange={(onLeave) => onPeriodChange(period, onLeave)}
+							disabled={saving !== null}
+							compact
+							className="w-full justify-between rounded-lg border border-[var(--c-border)] px-3 py-2"
+						/>
+					))}
+				</div>
+			</div>
+		</div>
 	);
 }
 
@@ -940,7 +1064,7 @@ function AdminPeriodControl({
 				</SelectContent>
 			</Select>
 			<label
-				htmlFor="attendance"
+				htmlFor={`attendance-${period}`}
 				className="mt-2 block text-[11px] font-semibold text-[var(--c-text-muted)]"
 			>
 				Attendance
@@ -951,7 +1075,7 @@ function AdminPeriodControl({
 					}
 				>
 					<SelectTrigger
-						id="attendance"
+						id={`attendance-${period}`}
 						aria-label={`${period} attendance`}
 						className="mt-1 h-9 text-xs"
 					>

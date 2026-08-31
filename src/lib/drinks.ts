@@ -115,12 +115,20 @@ export function updateGuestRequest(input: { type: 'approve' | 'reject' | 'remove
   return request<{ ok: true }>('/api/admin', { method: 'POST', body: JSON.stringify(input) })
 }
 
-export function updateUserResponse(input: { userId: string; period: Period; drink: Drink; sugar: boolean }) {
-  return request<{ ok: true }>('/api/admin', { method: 'POST', body: JSON.stringify({ type: 'response', date: new Date().toISOString().slice(0, 10), ...input }) })
+export function updateUserResponse(input: { userId: string; period: Period; drink: Drink; sugar: boolean; date?: string }) {
+  return request<{ ok: true }>('/api/admin', { method: 'POST', body: JSON.stringify({ type: 'response', date: input.date ?? new Date().toISOString().slice(0, 10), ...input }) })
 }
 
-export function updateUserAvailability(input: { userId: string; period: Period; status: AttendanceStatus }) {
-  return request<{ ok: true }>('/api/admin', { method: 'POST', body: JSON.stringify({ type: 'availability', date: new Date().toISOString().slice(0, 10), ...input }) })
+export function updateUserAvailability(input: { userId: string; period: Period; status: AttendanceStatus; date?: string }) {
+  return request<{ ok: true }>('/api/admin', { method: 'POST', body: JSON.stringify({ type: 'availability', date: input.date ?? new Date().toISOString().slice(0, 10), ...input }) })
+}
+
+export function updateUserLeave(input: { userId: string; date: string; periods: Period[]; onLeave: boolean }) {
+  return request<{ ok: true }>('/api/admin', { method: 'POST', body: JSON.stringify({ type: 'leave', ...input }) })
+}
+
+export function deleteUser(userId: string) {
+  return request<{ ok: true }>('/api/admin', { method: 'POST', body: JSON.stringify({ type: 'deleteUser', userId }) })
 }
 
 export type Cook = { id: string; name: string; phoneNumber: string; isActive: boolean; createdAt: Date; updatedAt: Date }

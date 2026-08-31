@@ -16,8 +16,12 @@ function json(data: unknown, init?: ResponseInit) {
 }
 
 function isPeriod(value: unknown): value is Period { return typeof value === 'string' && periods.includes(value as Period) }
+function isPeriodList(value: unknown): value is Period[] {
+  return Array.isArray(value) && value.length > 0 && new Set(value).size === value.length && value.every(isPeriod)
+}
 function isDrink(value: unknown): value is Drink { return typeof value === 'string' && drinks.includes(value as Drink) }
 function isAttendanceStatus(value: unknown): value is AttendanceStatus { return value === 'office' || value === 'wfh' || value === 'leave' }
+function isDate(value: unknown): value is string { return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) }
 
 async function getAdmin(request: Request) {
   const session = await auth.api.getSession({ headers: request.headers })
@@ -54,8 +58,14 @@ export const Route = createFileRoute('/api/admin')({
       POST: async ({ request }) => {
         const admin = await getAdmin(request)
         if (!admin) return json({ error: 'Admin access required' }, { status: 403 })
-        const body = await request.json() as { type?: unknown; userId?: unknown; period?: unknown; drink?: unknown; sugar?: unknown; status?: unknown; date?: unknown }
+        const body = await request.json() as { type?: unknown; userId?: unknown; period?: unknown; periods?: unknown; drink?: unknown; sugar?: unknown; status?: unknown; date?: unknown; onLeave?: unknown }
         if (typeof body.userId !== 'string' || !await canManage(admin, body.userId)) return json({ error: 'User is outside your company' }, { status: 403 })
+        if (body.type === 'deleteUser') {
+          if (body.userId === admin.userId) return json({ error: 'You cannot delete your own account' }, { status: 400 })
+          const deleted = await db.delete(user).where(eq(user.id, body.userId)).returning({ id: user.id })
+          if (!deleted.length) return json({ error: 'User not found' }, { status: 404 })
+          return json({ ok: true })
+        }
         if (body.type === 'approve') {
           const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
           await db.update(user).set({ guestStatus: 'approved', guestExpiresAt: expiresAt, guestReviewedAt: new Date() }).where(and(eq(user.id, body.userId), eq(user.isGuest, true)))
@@ -72,12 +82,25 @@ export const Route = createFileRoute('/api/admin')({
         }
         if (body.type === 'response' && isPeriod(body.period) && isDrink(body.drink) && typeof body.sugar === 'boolean') {
           const sugar = body.drink === 'No drink' ? true : body.sugar
-          await db.insert(drinkResponse).values({ id: crypto.randomUUID(), userId: body.userId, date: todayKey(), period: body.period, drink: body.drink, sugar, source: 'admin' }).onConflictDoUpdate({ target: [drinkResponse.userId, drinkResponse.date, drinkResponse.period], set: { drink: body.drink, sugar, source: 'admin', updatedAt: new Date() } })
+          const responseDate = isDate(body.date) ? body.date : todayKey()
+          await db.insert(drinkResponse).values({ id: crypto.randomUUID(), userId: body.userId, date: responseDate, period: body.period, drink: body.drink, sugar, source: 'admin' }).onConflictDoUpdate({ target: [drinkResponse.userId, drinkResponse.date, drinkResponse.period], set: { drink: body.drink, sugar, source: 'admin', updatedAt: new Date() } })
           return json({ ok: true })
         }
         if (body.type === 'availability' && isPeriod(body.period) && isAttendanceStatus(body.status)) {
-          const attendanceDate = typeof body.date === 'string' ? body.date : todayKey()
+          const attendanceDate = isDate(body.date) ? body.date : todayKey()
           await db.insert(attendance).values({ id: crypto.randomUUID(), userId: body.userId, date: attendanceDate, period: body.period, status: body.status, source: 'admin' }).onConflictDoUpdate({ target: [attendance.userId, attendance.date, attendance.period], set: { status: body.status, source: 'admin', updatedAt: new Date() } })
+          return json({ ok: true })
+        }
+        if (body.type === 'leave' && isDate(body.date) && isPeriodList(body.periods) && typeof body.onLeave === 'boolean') {
+          const status = body.onLeave ? 'leave' as const : 'office' as const
+          await db.transaction(async (tx) => {
+            for (const period of body.periods) {
+              await tx.insert(attendance).values({ id: crypto.randomUUID(), userId: body.userId as string, date: body.date as string, period, status, source: 'admin' }).onConflictDoUpdate({ target: [attendance.userId, attendance.date, attendance.period], set: { status, source: 'admin', updatedAt: new Date() } })
+              if (body.onLeave) {
+                await tx.insert(drinkResponse).values({ id: crypto.randomUUID(), userId: body.userId as string, date: body.date as string, period, drink: 'No drink' as Drink, sugar: true, source: 'admin' }).onConflictDoUpdate({ target: [drinkResponse.userId, drinkResponse.date, drinkResponse.period], set: { drink: 'No drink', sugar: true, source: 'admin', updatedAt: new Date() } })
+              }
+            }
+          })
           return json({ ok: true })
         }
         return json({ error: 'Invalid admin action' }, { status: 400 })
