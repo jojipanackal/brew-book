@@ -15,20 +15,16 @@ function minutesInIndia() {
   return hours * 60 + minutes
 }
 
-/** Periods whose opening time has passed and may need a missing response backfilled. */
+/** Both daily polls open at midnight and may need a missing response backfilled. */
 export function openPeriodsForToday(): Period[] {
-  const minutes = minutesInIndia()
-  if (minutes >= 14 * 60 + 30) return allPeriods
-  if (minutes >= 10 * 60 + 30) return ['morning']
-  return []
+  return allPeriods
 }
 
 export function currentlyOpenPeriods(): Period[] {
   const minutes = minutesInIndia()
-  // Prepare one minute before opening so the poll is ready at its start time.
-  if (minutes >= 10 * 60 + 29 && minutes < 11 * 60) return ['morning']
-  if (minutes >= 14 * 60 + 29 && minutes < 15 * 60 + 15) return ['evening']
-  return []
+  return allPeriods.filter((period) =>
+    period === 'morning' ? minutes < 11 * 60 : minutes < 15 * 60 + 15,
+  )
 }
 
 export async function ensureTodayResponses(companyId: string, date: string, periodsToEnsure: Period[] = allPeriods) {

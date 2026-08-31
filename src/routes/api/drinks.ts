@@ -131,6 +131,7 @@ export const Route = createFileRoute('/api/drinks')({
         if (body.type === 'response') {
           if (!isDate(body.date) || !isPeriod(body.period) || !isDrink(body.drink) || typeof body.sugar !== 'boolean') return json({ error: 'Invalid response' }, { status: 400 })
           if (currentUser.email.endsWith('@guest.brewbook.local') && body.date !== todayKey()) return json({ error: 'Guest responses are valid for today only' }, { status: 400 })
+          if (body.date === todayKey() && !currentlyOpenPeriods().includes(body.period)) return json({ error: `${body.period === 'morning' ? 'Morning' : 'Evening'} poll is closed` }, { status: 400 })
           const defaults = await readDay(currentUser.id, body.date)
           const sugar = body.drink === 'No drink' ? true : body.sugar
           await db.insert(drinkResponse).values({ id: crypto.randomUUID(), userId: currentUser.id, date: body.date, period: body.period, drink: body.drink, sugar, source: 'manual' }).onConflictDoUpdate({ target: [drinkResponse.userId, drinkResponse.date, drinkResponse.period], set: { drink: body.drink, sugar, source: 'manual', updatedAt: new Date() } })

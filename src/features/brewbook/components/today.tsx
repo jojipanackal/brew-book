@@ -92,14 +92,10 @@ export function TodayView({
 	}, []);
 
 	const morningClosed = nowIST >= 11 * 60;
-	const morningNotOpen = nowIST < 10 * 60 + 30;
-	const eveningNotOpen = nowIST < 14 * 60 + 30;
 	const eveningClosed = nowIST >= 15 * 60 + 15;
 
 	const isPeriodClosed = (id: Period) =>
-		id === "morning"
-			? morningNotOpen || morningClosed
-			: eveningNotOpen || eveningClosed;
+		id === "morning" ? morningClosed : eveningClosed;
 
 	// Twinkle Twinkle Little Star — C C G G A A G, F F E E D D C, ...
 	const TWINKLE = [
@@ -151,15 +147,7 @@ export function TodayView({
 							<DrinkPoll
 								period={period}
 								closed={isPeriodClosed(period.id)}
-								closedMessage={
-									period.id === "morning"
-										? morningNotOpen
-											? "Poll opens at 10:30 AM"
-											: "Poll closed"
-										: eveningNotOpen
-											? "Poll opens at 2:30 PM"
-											: "Poll closed"
-								}
+								closedMessage="Poll closed"
 								polls={todayPolls}
 								selected={entry[period.id]}
 								sugar={sugar[period.id]}
@@ -404,7 +392,6 @@ function DrinkPoll({
 	const unavailableCount = polls.length - activePolls.length;
 	const total = activePolls.length;
 	const [infoDrink, setInfoDrink] = useState<Drink | null>(null);
-	const pollUpcoming = closedMessage.startsWith("Poll opens");
 	return (
 		<Card className="overflow-hidden">
 			<div className="flex items-center justify-between gap-4 border-b border-[var(--c-border-2)] px-4 py-3.5 sm:px-5">
@@ -430,7 +417,7 @@ function DrinkPoll({
 				/>
 			</div>
 			{closed && (
-				<Banner variant={pollUpcoming ? "success" : "error"} dot>
+				<Banner variant="error" dot>
 					{closedMessage}
 				</Banner>
 			)}

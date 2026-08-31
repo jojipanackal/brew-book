@@ -5,22 +5,12 @@ if (!process.env.DATABASE_URL) loadDotenvx()
 import { db } from '../src/db'
 import { company } from '../src/db/schema'
 import { ensureTodayResponses, todayKey } from '../src/lib/poll-responses'
-import type { Period } from '../src/lib/drinks'
+import { periods, type Period } from '../src/lib/drinks'
 
-const indiaTimeFormatter = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false })
 const completed = new Set<string>()
 
-function minutesInIndia() {
-  const [hours, minutes] = indiaTimeFormatter.format(new Date()).split(':').map(Number)
-  return hours * 60 + minutes
-}
-
 function periodsReady(): Period[] {
-  const minutes = minutesInIndia()
-  const ready: Period[] = []
-  if (minutes >= 10 * 60 + 29) ready.push('morning')
-  if (minutes >= 14 * 60 + 29) ready.push('evening')
-  return ready
+  return [...periods]
 }
 
 async function run() {
