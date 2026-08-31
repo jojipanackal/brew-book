@@ -96,9 +96,6 @@ export const Route = createFileRoute('/api/admin')({
           await db.transaction(async (tx) => {
             for (const period of body.periods) {
               await tx.insert(attendance).values({ id: crypto.randomUUID(), userId: body.userId as string, date: body.date as string, period, status, source: 'admin' }).onConflictDoUpdate({ target: [attendance.userId, attendance.date, attendance.period], set: { status, source: 'admin', updatedAt: new Date() } })
-              if (body.onLeave) {
-                await tx.insert(drinkResponse).values({ id: crypto.randomUUID(), userId: body.userId as string, date: body.date as string, period, drink: 'No drink' as Drink, sugar: true, source: 'admin' }).onConflictDoUpdate({ target: [drinkResponse.userId, drinkResponse.date, drinkResponse.period], set: { drink: 'No drink', sugar: true, source: 'admin', updatedAt: new Date() } })
-              }
             }
           })
           return json({ ok: true })
