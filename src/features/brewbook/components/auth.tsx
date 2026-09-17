@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Check, Coffee } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Alert, Button, Input, Spinner } from "#/components/ui";
 import {
@@ -11,7 +11,6 @@ import { brewingMessages, periodDetails } from "../constants";
 import type { OnboardingState } from "../types";
 import { cx, pickRandom } from "../utils";
 import { SugarToggle } from "./common";
-import { BrandMark } from "./navigation";
 
 export function GuestSetupPage({
 	onSubmit,
@@ -37,7 +36,7 @@ export function GuestSetupPage({
 	};
 	return (
 		<main className="grid min-h-svh place-items-center bg-[var(--c-page)] px-5 py-10 text-[var(--c-text-dark)]">
-			<section className="w-full max-w-sm rounded-3xl bg-[var(--c-card)] p-6 shadow-[0_20px_60px_rgba(77,57,38,0.1)] sm:p-8">
+			<section className="w-full max-w-sm bg-[var(--c-page)] p-6 sm:p-8">
 				<h1 className="font-serif text-3xl">
 					{step === "name" ? "What is your name?" : "Choose your company"}
 				</h1>
@@ -151,65 +150,45 @@ export function SignInPage({
 	onGuest: () => void;
 	onLocalSignUp?: () => void;
 }) {
-	useEffect(() => {
-		const html = document.documentElement;
-		const wasDark = html.classList.contains("dark");
-		html.classList.remove("dark");
-		return () => {
-			if (wasDark) html.classList.add("dark");
-		};
-	}, []);
 	return (
-		<main className="relative grid min-h-svh place-items-center overflow-hidden bg-[var(--c-page)] px-5 py-10 text-[var(--c-cream)]">
-			<div
-				aria-hidden="true"
-				className="pointer-events-none absolute inset-0 overflow-hidden text-[#c9ad90]/35"
-			>
-				<Coffee
-					className="absolute -right-24 -top-20 size-[30rem] rotate-12"
-					strokeWidth={0.7}
-				/>
-				<Coffee
-					className="absolute -bottom-32 -left-24 size-[24rem] -rotate-12 text-[#e0d0bf]"
-					strokeWidth={0.7}
-				/>
+		<main className="signin-page">
+			<div className="signin-brand wordmark">
+				brew<span>book</span>
+				<span className="brand-dot">.</span>
 			</div>
-			<section className="relative z-10 flex w-full max-w-sm flex-col items-center rounded-3xl bg-[var(--c-brand)] px-6 py-9 text-center shadow-[0_20px_60px_rgba(77,57,38,0.2)] sm:px-8">
-				<BrandMark
-					className="size-16 rounded-[18px] bg-[var(--c-cream)] text-[var(--c-brand)]"
-					iconColor="#5a3c26"
-					iconSize={30}
-				/>
-				<h1 className="mt-7 font-serif text-5xl leading-tight">BrewBook</h1>
-				<p className="mt-4 max-w-xs text-[15px] leading-6 text-[#e7d8c4]">
-					Use your work email to continue.
+			<section className="signin-content">
+				<p className="eyebrow">Your daily round</p>
+				<h1 className="drink-sentence">
+					A moment for
+					<br />
+					<span className="signin-coffee">coffee.</span>
+				</h1>
+				<p className="signin-description">
+					Tea, coffee, or a little break.
+					<br />
+					Let your team know what you’re having.
 				</p>
-				<Button
-					onClick={signIn}
-					type="button"
-					variant="cream"
-					fullWidth
-					className="mt-8 gap-3"
-				>
+				<Button onClick={signIn} type="button" className="signin-button">
 					<img alt="" className="size-5" src="/google-g.png" />
 					Continue with Google
-					<ArrowRight size={17} />
+					<ArrowRight size={16} />
 				</Button>
-				<Button
+				<p className="signin-note">Use your registered work email.</p>
+				<button
 					onClick={onGuest}
-					variant="link"
-					className="mt-3 text-[#e7d8c4] decoration-[#c9ad90]"
+					type="button"
+					className="text-action guest-link"
 				>
-					Continue as guest
-				</Button>
+					Continue as guest <span aria-hidden="true">↗</span>
+				</button>
 				{onLocalSignUp && (
-					<Button
+					<button
 						onClick={onLocalSignUp}
-						variant="link"
-						className="mt-2 text-xs text-[#e7d8c4] decoration-[#c9ad90]"
+						type="button"
+						className="text-action local-signup"
 					>
 						Sign up locally
-					</Button>
+					</button>
 				)}
 			</section>
 		</main>
@@ -225,7 +204,7 @@ export function AccessDeniedPage({
 }) {
 	return (
 		<main className="grid min-h-svh place-items-center bg-[var(--c-page)] px-5 text-[var(--c-text-dark)]">
-			<section className="w-full max-w-sm rounded-3xl bg-[var(--c-card)] p-8 text-center shadow-[0_20px_60px_rgba(77,57,38,0.1)]">
+			<section className="w-full max-w-sm bg-[var(--c-page)] p-8 text-center">
 				<h1 className="font-serif text-3xl">Work email not recognized</h1>
 				<p className="mt-3 text-sm leading-6 text-[var(--c-text-muted)]">
 					Use an email from a registered company, or request guest access from a
@@ -251,7 +230,7 @@ export function AccessDeniedPage({
 export function GuestPendingPage({ onExit }: { onExit: () => void }) {
 	return (
 		<main className="grid min-h-svh place-items-center bg-[var(--c-page)] px-5 text-[var(--c-text-dark)]">
-			<section className="w-full max-w-sm rounded-3xl bg-[var(--c-card)] p-8 text-center shadow-[0_20px_60px_rgba(77,57,38,0.1)]">
+			<section className="w-full max-w-sm bg-[var(--c-page)] p-8 text-center">
 				<h1 className="font-serif text-3xl">Waiting for approval</h1>
 				<p className="mt-3 text-sm leading-6 text-[var(--c-text-muted)]">
 					A company admin needs to approve your guest request before you can
@@ -273,7 +252,7 @@ export function GuestPendingPage({ onExit }: { onExit: () => void }) {
 export function GuestRejectedPage({ onExit }: { onExit: () => void }) {
 	return (
 		<main className="grid min-h-svh place-items-center bg-[var(--c-page)] px-5 text-[var(--c-text-dark)]">
-			<section className="w-full max-w-sm rounded-3xl bg-[var(--c-card)] p-8 text-center shadow-[0_20px_60px_rgba(77,57,38,0.1)]">
+			<section className="w-full max-w-sm bg-[var(--c-page)] p-8 text-center">
 				<h1 className="font-serif text-3xl">Guest request declined</h1>
 				<p className="mt-3 text-sm leading-6 text-[var(--c-text-muted)]">
 					Ask the company admin to approve your guest access.
@@ -324,7 +303,7 @@ export function OnboardingPage({
 				<h1 className="mb-5 font-serif text-2xl leading-tight text-[var(--c-text-dark)]">
 					Choose your {period.label.toLowerCase()} default
 				</h1>
-				<section className="rounded-3xl bg-[var(--c-card)] p-5 shadow-[0_20px_60px_rgba(77,57,38,0.1)] sm:p-8">
+				<section className="bg-[var(--c-page)] p-5 sm:p-8">
 					<div className="flex justify-end">
 						<SugarToggle
 							compact
@@ -392,7 +371,7 @@ export function OnboardingPage({
 export function LocalSetupComplete({ onReset }: { onReset: () => void }) {
 	return (
 		<main className="grid min-h-svh place-items-center bg-[var(--c-page)] px-5 py-10 text-[var(--c-text-dark)]">
-			<section className="w-full max-w-sm rounded-3xl bg-[var(--c-card)] p-8 text-center shadow-[0_20px_60px_rgba(77,57,38,0.1)]">
+			<section className="w-full max-w-sm bg-[var(--c-page)] p-8 text-center">
 				<div className="mx-auto grid size-14 place-items-center rounded-2xl bg-[var(--c-brand)] text-[var(--c-cream)]">
 					<Check size={26} />
 				</div>
