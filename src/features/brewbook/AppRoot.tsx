@@ -32,8 +32,8 @@ import {
 	OnboardingPage,
 	SignInPage,
 } from "./components/auth";
-import { BrandMark, Nav } from "./components/navigation";
-import { GlassEasterEgg, PollDetailsSheet } from "./components/overlays";
+import { AppMenu } from "./components/navigation";
+import { PollDetailsSheet } from "./components/overlays";
 import { ProfileView } from "./components/profile";
 import { StatsView } from "./components/stats";
 import { TodayView } from "./components/today";
@@ -42,7 +42,6 @@ import { useTheme } from "./hooks/use-theme";
 import type { AppState, OnboardingState, OpenPoll, View } from "./types";
 import {
 	authErrorMessage,
-	cx,
 	isTransientFetchError,
 	pickRandom,
 	reportSentryError,
@@ -75,114 +74,9 @@ function App() {
 	const { dark, toggle: toggleTheme } = useTheme();
 	const [state, setState] = useState<AppState>(readState);
 	const [view, setView] = useState<View>("today");
-	const [pianoMode, setPianoMode] = useState(false);
-	const pollTapCount = useRef(0);
-	const pollTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-	function handlePollTabClick() {
-		setView("today");
-		if (pollTapTimer.current) clearTimeout(pollTapTimer.current);
-		pollTapCount.current += 1;
-		if (pollTapCount.current >= 3) {
-			pollTapCount.current = 0;
-			setPianoMode((m) => !m);
-			return;
-		}
-		pollTapTimer.current = setTimeout(() => {
-			pollTapCount.current = 0;
-		}, 2500);
-	}
 	const [historyDate, setHistoryDate] = useState(todayKey);
 	const [historyLoading, setHistoryLoading] = useState(false);
 	const [openPoll, setOpenPoll] = useState<OpenPoll>(null);
-	const [eggOpen, setEggOpen] = useState(false);
-	const [, setEggTaps] = useState(0);
-	function tapLogo() {
-		setEggTaps((n) => {
-			const next = n + 1;
-			if (next >= 5) {
-				setEggOpen(true);
-				return 0;
-			}
-			return next;
-		});
-	}
-	const [, setNameTaps] = useState(0);
-	const nameTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-	function tapName() {
-		setNameTaps((n) => {
-			const next = n + 1;
-			if (nameTapTimer.current) clearTimeout(nameTapTimer.current);
-			if (next >= 5) {
-				launchConfetti();
-				return 0;
-			}
-			nameTapTimer.current = setTimeout(() => setNameTaps(0), 1500);
-			return next;
-		});
-	}
-	function launchConfetti() {
-		const canvas = document.createElement("canvas");
-		canvas.style.cssText =
-			"position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:9999";
-		canvas.width = window.innerWidth;
-		canvas.height = window.innerHeight;
-		document.body.appendChild(canvas);
-		const ctx = canvas.getContext("2d");
-		if (!ctx) {
-			canvas.remove();
-			return;
-		}
-		const drawingContext = ctx;
-		const colors = [
-			"#a06840",
-			"#d09060",
-			"#5a3c26",
-			"#c8956a",
-			"#f0e6d8",
-			"#68452e",
-			"#b87848",
-		];
-		const pieces = Array.from({ length: 120 }, () => ({
-			x: Math.random() * canvas.width,
-			y: -10 - Math.random() * 100,
-			vx: (Math.random() - 0.5) * 6,
-			vy: 3 + Math.random() * 4,
-			rot: Math.random() * Math.PI * 2,
-			rotV: (Math.random() - 0.5) * 0.3,
-			w: 8 + Math.random() * 8,
-			h: 4 + Math.random() * 4,
-			color: colors[Math.floor(Math.random() * colors.length)],
-			alpha: 1,
-		}));
-		let raf = 0;
-		function draw() {
-			drawingContext.clearRect(0, 0, canvas.width, canvas.height);
-			let alive = false;
-			for (const p of pieces) {
-				p.x += p.vx;
-				p.y += p.vy;
-				p.vy += 0.12;
-				p.rot += p.rotV;
-				if (p.y > canvas.height + 20) continue;
-				if (p.y > canvas.height * 0.7) p.alpha = Math.max(0, p.alpha - 0.03);
-				alive = true;
-				drawingContext.save();
-				drawingContext.globalAlpha = p.alpha;
-				drawingContext.translate(p.x, p.y);
-				drawingContext.rotate(p.rot);
-				drawingContext.fillStyle = p.color;
-				drawingContext.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
-				drawingContext.restore();
-			}
-			if (alive) {
-				raf = requestAnimationFrame(draw);
-			} else {
-				cancelAnimationFrame(raf);
-				canvas.remove();
-			}
-		}
-		raf = requestAnimationFrame(draw);
-	}
 	const [error, setError] = useState<string | null>(null);
 	const [profileReady, setProfileReady] = useState(false);
 	const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
@@ -384,9 +278,16 @@ function App() {
 			return;
 		let cancelled = false;
 		const refreshToday = () => {
+			if (mutation.current.pending) return;
+			const revision = mutation.current.revision;
 			void getDrinkDay(todayKey)
 				.then((day) => {
-					if (cancelled) return;
+					if (
+						cancelled ||
+						mutation.current.pending ||
+						revision !== mutation.current.revision
+					)
+						return;
 					setState((current) => ({
 						...current,
 						defaults: day.defaults,
@@ -396,7 +297,11 @@ function App() {
 					setError(null);
 				})
 				.catch((reason: unknown) => {
-					if (!cancelled)
+					if (
+						!cancelled &&
+						!mutation.current.pending &&
+						revision === mutation.current.revision
+					)
 						setError(reportSentryError(reason, "Unable to refresh today"));
 				});
 		};
@@ -429,13 +334,17 @@ function App() {
 		if (!sessionUserId && !guestSession) return;
 		let cancelled = false;
 		setHistoryLoading(true);
+		const revision = mutation.current.revision;
 		void getDrinkDay(historyDate)
 			.then((day) => {
-				if (cancelled) return;
+				if (
+					cancelled ||
+					mutation.current.pending ||
+					revision !== mutation.current.revision
+				)
+					return;
 				setState((current) => ({
 					...current,
-					defaults: day.defaults,
-					sugarDefaults: day.sugarDefaults,
 					entries: { ...current.entries, [historyDate]: day.responses },
 				}));
 				setError(null);
@@ -475,17 +384,6 @@ function App() {
 			cancelled = true;
 		};
 	}, [guestSession, openPoll, sessionUserId, state.entries]);
-	useEffect(() => {
-		if (!openPoll) return;
-		const scrollY = window.scrollY;
-		document.body.style.top = `-${scrollY}px`;
-		document.body.classList.add("modal-open");
-		return () => {
-			document.body.classList.remove("modal-open");
-			document.body.style.top = "";
-			window.scrollTo(0, scrollY);
-		};
-	}, [openPoll]);
 
 	function signIn() {
 		authClient.signIn
@@ -560,46 +458,39 @@ function App() {
 			);
 		}
 	}
-	function updateEntry(period: Period, drink: Drink) {
-		if (!state.user) return;
-		const existing = state.entries[todayKey]?.find(
-			(entry) => entry.user.email === state.user?.email,
-		);
-		const choices = {
-			...(existing?.choices ?? state.defaults),
-			[period]: drink,
-		};
-		const sugar = existing?.sugar?.[period] ?? state.sugarDefaults[period];
-		setState((current) => {
-			if (!current.user) return current;
-			const nextEntries = (current.entries[todayKey] ?? []).map((entry) =>
-				entry.user.email === current.user?.email
-					? {
-							...entry,
-							choices,
-							sugar: { ...entry.sugar, [period]: sugar },
-							sources: { ...entry.sources, [period]: "manual" as const },
-						}
-					: entry,
-			);
-			return {
+	const [saving, setSaving] = useState(false);
+	const [saveMessage, setSaveMessage] = useState("");
+	const mutation = useRef({ pending: false, revision: 0 });
+	async function updateChoice(period: Period, drink: Drink, sugar: boolean) {
+		if (!state.user || mutation.current.pending) return;
+		mutation.current.pending = true;
+		mutation.current.revision += 1;
+		setSaving(true);
+		setSaveMessage("");
+		try {
+			const day = await saveResponse({ date: todayKey, period, drink, sugar });
+			setState((current) => ({
 				...current,
-				entries: { ...current.entries, [todayKey]: nextEntries },
-			};
-		});
-		void saveResponse({ date: todayKey, period, drink, sugar })
-			.then((day) => {
-				setState((current) => ({
-					...current,
-					defaults: day.defaults,
-					sugarDefaults: day.sugarDefaults,
-					entries: { ...current.entries, [todayKey]: day.responses },
-				}));
-				setError(null);
-			})
-			.catch((reason: unknown) =>
-				setError(reportSentryError(reason, "Unable to save your drink")),
+				defaults: day.defaults,
+				sugarDefaults: day.sugarDefaults,
+				entries: { ...current.entries, [todayKey]: day.responses },
+			}));
+			setError(null);
+			setSaveMessage(
+				`${period === "morning" ? "Morning" : "Evening"} choice saved.`,
 			);
+		} catch (reason: unknown) {
+			setError(reportSentryError(reason, "Unable to save your drink"));
+			setSaveMessage(
+				"Not saved. Please try again; your previous choice is unchanged.",
+			);
+		} finally {
+			mutation.current.pending = false;
+			setSaving(false);
+		}
+	}
+	function updateEntry(period: Period, drink: Drink) {
+		void updateChoice(period, drink, todaysSugar[period]);
 	}
 
 	function updateDefault(period: Period, drink: Drink, sugar: boolean) {
@@ -622,57 +513,22 @@ function App() {
 			);
 	}
 	function updateSugar(period: Period, sugar: boolean) {
-		if (!state.user) return;
-		const existing = state.entries[todayKey]?.find(
-			(entry) => entry.user.email === state.user?.email,
-		);
-		const drink = existing?.choices[period] ?? state.defaults[period];
-		setState((current) => ({
-			...current,
-			entries: {
-				...current.entries,
-				[todayKey]: (current.entries[todayKey] ?? []).map((entry) =>
-					entry.user.email === current.user?.email
-						? {
-								...entry,
-								sugar: { ...entry.sugar, [period]: sugar },
-								sources: { ...entry.sources, [period]: "manual" as const },
-							}
-						: entry,
-				),
-			},
-		}));
-		void saveResponse({ date: todayKey, period, drink, sugar })
-			.then((day) => {
-				setState((current) => ({
-					...current,
-					defaults: day.defaults,
-					sugarDefaults: day.sugarDefaults,
-					entries: { ...current.entries, [todayKey]: day.responses },
-				}));
-				setError(null);
-			})
-			.catch((reason: unknown) =>
-				setError(reportSentryError(reason, "Unable to save sugar preference")),
-			);
+		void updateChoice(period, todaysEntry[period], sugar);
 	}
 
 	const [availabilityLoading, setAvailabilityLoading] = useState<Period | null>(
 		null,
 	);
 	function updateAvailability(period: Period, status: AttendanceStatus) {
-		if (!state.user || availabilityLoading) return;
+		if (!state.user || mutation.current.pending) return;
+		mutation.current.pending = true;
+		mutation.current.revision += 1;
+		setSaveMessage("");
 		const nextAvailability = {
 			morning: state.user.availability?.morning ?? "office",
 			evening: state.user.availability?.evening ?? "office",
 			[period]: status,
 		};
-		setState((current) => ({
-			...current,
-			user: current.user
-				? { ...current.user, availability: nextAvailability }
-				: null,
-		}));
 		setAvailabilityLoading(period);
 		void setAvailability({ date: todayKey, period, status })
 			.then(() => getDrinkDay(todayKey))
@@ -691,10 +547,14 @@ function App() {
 					entries: { ...current.entries, [todayKey]: day.responses },
 				})),
 			)
-			.catch((reason: unknown) =>
-				setError(reportSentryError(reason, "Unable to save availability")),
-			)
-			.finally(() => setAvailabilityLoading(null));
+			.catch((reason: unknown) => {
+				setError(reportSentryError(reason, "Unable to save availability"));
+				setSaveMessage("Unable to refresh attendance. Please try again.");
+			})
+			.finally(() => {
+				mutation.current.pending = false;
+				setAvailabilityLoading(null);
+			});
 	}
 
 	if (authPending || guestPending)
@@ -744,124 +604,96 @@ function App() {
 	const openPollData = openPoll ? (state.entries[openPoll.date] ?? []) : [];
 	return (
 		<ErrorBoundary fallback={AppErrorFallback}>
-			<main
-				className={cx(
-					"min-h-dvh bg-[var(--c-page)] text-[var(--c-text)] lg:pb-0",
-				)}
-				style={{
-					paddingTop: "calc(57px + env(safe-area-inset-top))",
-					paddingBottom: isGuest
-						? undefined
-						: "calc(5rem + env(safe-area-inset-bottom))",
-				}}
-			>
-				<header
-					className="fixed inset-x-0 top-0 z-10 border-b border-[var(--c-border)] bg-[var(--c-card)]/95 backdrop-blur"
-					style={{ paddingTop: "env(safe-area-inset-top)" }}
-				>
-					<div className="mx-auto flex max-w-[1180px] items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
-						<button
-							type="button"
-							onClick={tapLogo}
-							className="flex items-center gap-2.5"
-							aria-label="BrewBook logo"
-						>
-							<BrandMark />
-							<span className="font-serif text-xl font-semibold tracking-[-0.02em]">
-								BrewBook
-							</span>
-						</button>
-						<button
-							onClick={tapName}
-							type="button"
-							aria-label="Open profile"
-							className="text-sm font-semibold text-[var(--c-text-mid)] transition hover:text-[var(--c-brand)]"
-						>
-							Hi, {state.user.name.split(" ")[0]}
-						</button>
-					</div>
+			<div className="app-shell">
+				<a className="skip-link" href="#main-content">
+					Skip to content
+				</a>
+				<header className="app-header">
+					<button
+						type="button"
+						className="wordmark"
+						onClick={() => setView("today")}
+						aria-label="BrewBook, today"
+					>
+						brew<span>book</span>
+						<span className="brand-dot" aria-hidden="true">
+							.
+						</span>
+					</button>
+					<AppMenu
+						view={visibleView}
+						setView={setView}
+						admin={state.user.role === "admin"}
+						guest={isGuest}
+						name={state.user.name}
+						onSignOut={signOut}
+					/>
 				</header>
 				{error && (
-					<div className="mx-auto mt-4 max-w-[1180px] px-4 sm:px-6 lg:px-8">
-						<div
-							className="rounded-xl border border-[var(--c-border-err)] bg-[var(--c-err-bg)] px-3 py-2 text-sm text-[var(--c-text-err)]"
-							role="alert"
-						>
-							{error}
-						</div>
+					<div className="app-error" role="alert">
+						{error}
 					</div>
 				)}
-				<div
-					className={cx(
-						"mx-auto grid max-w-[1180px] gap-6 px-4 py-5 sm:px-6 lg:gap-10 lg:px-8 lg:py-8",
-						!isGuest && "lg:grid-cols-[190px_1fr]",
-					)}
+				<main
+					id="main-content"
+					tabIndex={-1}
+					className={
+						visibleView === "admin"
+							? "app-content app-content-wide"
+							: "app-content"
+					}
 				>
-					{!isGuest && (
-						<aside className="hidden lg:sticky lg:top-8 lg:h-fit lg:block">
-							<Nav
-								admin={state.user.role === "admin"}
-								view={view}
-								setView={setView}
-								onPollClick={handlePollTabClick}
-								pianoOn={pianoMode}
-							/>
-						</aside>
-					)}
-					<section className="min-w-0">
-						{visibleView === "today" && (
-							<TodayView
-								guest={isGuest}
-								entry={todaysEntry}
-								sugar={todaysSugar}
-								todayPolls={todayPolls}
-								updateEntry={updateEntry}
-								updateSugar={updateSugar}
-								onOpen={(period) => setOpenPoll({ date: todayKey, period })}
-								availability={state.user.availability}
-								onUpdateAvailability={updateAvailability}
-								availabilityLoading={availabilityLoading}
-								pianoMode={pianoMode}
-							/>
-						)}
-						{visibleView === "stats" && !isGuest && <StatsView />}
-						{visibleView === "profile" && !isGuest && (
-							<ProfileView
-								user={state.user}
-								defaults={state.defaults}
-								sugarDefaults={state.sugarDefaults}
-								updateDefault={updateDefault}
-								onSignOut={signOut}
-								isGuest={isGuest}
-								dark={dark}
-								onToggleTheme={toggleTheme}
-								historyDate={historyDate}
-								setHistoryDate={setHistoryDate}
-								historyPolls={historyPolls}
-								historyLoading={historyLoading}
-							/>
-						)}
-						{visibleView === "admin" && !isGuest && (
-							<AdminView
-								data={adminData}
-								onRefresh={() => void getAdminDashboard().then(setAdminData)}
-							/>
-						)}
-					</section>
-				</div>
-				{!isGuest && (
-					<div className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--c-border)] bg-[var(--c-card)]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:px-4 lg:hidden">
-						<Nav
-							admin={state.user.role === "admin"}
-							view={view}
-							setView={setView}
-							onPollClick={handlePollTabClick}
-							pianoOn={pianoMode}
-							mobile
+					{visibleView === "today" && (
+						<TodayView
+							guest={isGuest}
+							entry={todaysEntry}
+							sugar={todaysSugar}
+							todayPolls={todayPolls}
+							updateEntry={updateEntry}
+							updateSugar={updateSugar}
+							onOpen={(period) => setOpenPoll({ date: todayKey, period })}
+							availability={todayPoll?.availability ?? state.user.availability}
+							onUpdateAvailability={updateAvailability}
+							availabilityLoading={availabilityLoading}
+							saving={saving}
+							saveMessage={saveMessage}
+							sources={todayPoll?.sources}
 						/>
-					</div>
-				)}
-				{eggOpen && <GlassEasterEgg onClose={() => setEggOpen(false)} />}
+					)}
+					{visibleView === "stats" && !isGuest && <StatsView />}
+					{visibleView === "profile" && !isGuest && (
+						<ProfileView
+							user={state.user}
+							defaults={state.defaults}
+							sugarDefaults={state.sugarDefaults}
+							updateDefault={updateDefault}
+							onSignOut={signOut}
+							isGuest={isGuest}
+							dark={dark}
+							onToggleTheme={toggleTheme}
+							historyDate={historyDate}
+							setHistoryDate={setHistoryDate}
+							historyPolls={historyPolls}
+							historyLoading={historyLoading}
+						/>
+					)}
+					{visibleView === "admin" && !isGuest && (
+						<AdminView
+							data={adminData}
+							onRefresh={() => void getAdminDashboard().then(setAdminData)}
+						/>
+					)}
+				</main>
+				<footer className="app-footer">
+					<span>A little pause in your day.</span>
+					<a
+						href="https://github.com/jojipanackal/brew-book"
+						target="_blank"
+						rel="noreferrer"
+					>
+						BrewBook on GitHub ↗
+					</a>
+				</footer>
 				{openPoll && (
 					<PollDetailsSheet
 						date={openPoll.date}
@@ -870,7 +702,7 @@ function App() {
 						onClose={() => setOpenPoll(null)}
 					/>
 				)}
-			</main>
+			</div>
 		</ErrorBoundary>
 	);
 }
