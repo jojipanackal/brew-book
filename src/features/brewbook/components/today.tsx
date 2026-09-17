@@ -1,4 +1,3 @@
-import { ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
 	Select,
@@ -19,6 +18,7 @@ import {
 } from "#/lib/drinks";
 import { todayKey } from "../constants";
 import { displayDate } from "../utils";
+import { DrinkArtwork } from "./drink-artwork";
 
 export function minutesInIST() {
 	const parts = new Intl.DateTimeFormat("en-GB", {
@@ -86,12 +86,6 @@ export function TodayView({
 	const busy = saving || availabilityLoading !== null;
 	const disabled = closed || away;
 	const label = period === "morning" ? "Morning" : "Evening";
-	const activePolls = todayPolls.filter(
-		(poll) => poll.availability[period] === "office",
-	);
-	const count = activePolls.filter(
-		(poll) => poll.choices[period] !== "No drink",
-	).length;
 	const source = sources?.[period];
 	return (
 		<div className="today-page">
@@ -193,7 +187,7 @@ export function TodayView({
 					{closed
 						? `${label} orders closed at ${deadlines[period]} IST.`
 						: away
-							? "No drink will be ordered. Change your attendance in More details."
+							? "No drink will be ordered for this round."
 							: "Tap the underlined words to make it yours."}
 				</p>
 				<output className="save-status" aria-live="polite" aria-atomic="true">
@@ -211,84 +205,78 @@ export function TodayView({
 											: "Your usual choice for this round.")}
 				</output>
 			</section>
-			<details className="today-details">
-				<summary>
-					<span>More details</span>
-					<ChevronDown size={16} aria-hidden="true" />
-				</summary>
-				<div className="details-content">
-					{!guest && (
-						<div className="detail-row">
-							<label htmlFor="round-attendance">This {period}</label>
-							<Select
-								value={availability[period]}
-								disabled={closed || !onUpdateAvailability}
-								onValueChange={(value) => {
-									if (!busy)
-										onUpdateAvailability?.(period, value as AttendanceStatus);
-								}}
-							>
-								<SelectTrigger
-									id="round-attendance"
-									className="attendance-select"
-									aria-disabled={closed || busy || !onUpdateAvailability}
-									onPointerDown={(event) => {
-										if (busy) event.preventDefault();
-									}}
-									onKeyDown={(event) => {
-										if (
-											busy &&
-											[" ", "Enter", "ArrowDown", "ArrowUp"].includes(event.key)
-										)
-											event.preventDefault();
-									}}
-								>
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									{(Object.keys(attendanceLabels) as AttendanceStatus[]).map(
-										(status) => (
-											<SelectItem
-												className="min-h-11 pr-9"
-												key={status}
-												value={status}
-											>
-												{attendanceLabels[status]}
-											</SelectItem>
-										),
-									)}
-								</SelectContent>
-							</Select>
+			<div className="today-secondary">
+				{!guest && (
+					<fieldset
+						className="attendance-options"
+						aria-describedby="attendance-scope"
+					>
+						<legend>This {period}, I’m</legend>
+						<div className="attendance-choices">
+							{(Object.keys(attendanceLabels) as AttendanceStatus[]).map(
+								(status) => (
+									<label
+										key={status}
+										className="attendance-option"
+										data-selected={availability[period] === status}
+									>
+										<input
+											type="radio"
+											name="attendance"
+											value={status}
+											checked={availability[period] === status}
+											disabled={closed || !onUpdateAvailability}
+											aria-disabled={closed || busy || !onUpdateAvailability}
+											onClick={(event) => {
+												if (busy) event.preventDefault();
+											}}
+											onKeyDown={(event) => {
+												if (
+													busy &&
+													[
+														" ",
+														"ArrowDown",
+														"ArrowUp",
+														"ArrowLeft",
+														"ArrowRight",
+													].includes(event.key)
+												)
+													event.preventDefault();
+											}}
+											onChange={() => {
+												if (!busy) onUpdateAvailability?.(period, status);
+											}}
+										/>
+										<span>{attendanceLabels[status]}</span>
+									</label>
+								),
+							)}
 						</div>
-					)}
-					<div className="detail-row">
-						<span>{closed ? "Orders closed" : "Changes until"}</span>
-						<span>{deadlines[period]} IST</span>
-					</div>
-					<div className="detail-row">
-						<span>
-							{count} {count === 1 ? "drink" : "drinks"} this {period}
-						</span>
-						<button
-							type="button"
-							className="text-action"
-							onClick={() => onOpen(period)}
-						>
-							View responses <span aria-hidden="true">↗</span>
-						</button>
-					</div>
-					<p className="details-note">
-						Changes here apply to this round only.
-						{!guest &&
-							" Set your usual drinks in Menu → Preferences & history."}
+						<p id="attendance-scope" className="attendance-scope">
+							{closed
+								? "Attendance is closed for this round."
+								: `Applies to this ${period} only.`}
+						</p>
+					</fieldset>
+				)}
+				<div className="round-actions">
+					<p className="round-deadline">
+						{closed
+							? "This round is complete."
+							: `Changes until ${deadlines[period]} IST.`}
 					</p>
+					<button
+						type="button"
+						className="text-action"
+						onClick={() => onOpen(period)}
+					>
+						View responses{" "}
+						<span className="response-count">{todayPolls.length}</span>
+						<span aria-hidden="true">↗</span>
+					</button>
 				</div>
-			</details>
-			<p className="round-footer">
-				{closed
-					? "This round is complete."
-					: `You can change your mind until ${deadlines[period]} IST.`}
-			</p>
+				<DrinkArtwork drink={entry[period]} away={away} />
+			</div>
 		</div>
 	);
 }

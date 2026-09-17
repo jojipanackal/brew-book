@@ -346,70 +346,6 @@ button:not(:disabled), summary {
 	margin-top: 8px;
 }
 
-.today-details {
-	margin-top: 44px;
-	border-top: 1px solid var(--c-border);
-	border-bottom: 1px solid var(--c-border);
-}
-
-.today-details summary {
-	display: flex;
-	min-height: 60px;
-	align-items: center;
-	justify-content: space-between;
-	list-style: none;
-	font-size: 13px;
-}
-
-.today-details summary::-webkit-details-marker {
-	display: none;
-}
-
-.today-details summary svg {
-	transition: transform .2s ease;
-}
-
-.today-details[open] summary svg {
-	transform: rotate(180deg);
-}
-
-.details-content {
-	animation: detail-reveal .2s ease;
-}
-
-.detail-row {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 20px;
-	min-height: 62px;
-	border-top: 1px solid var(--c-border-2);
-	font-size: 13px;
-}
-
-.detail-row > :first-child {
-	color: var(--c-text-muted);
-}
-
-.attendance-select {
-	width: auto;
-	max-width: 65%;
-	min-height: 44px;
-	border: 0;
-	background: transparent;
-	padding: 0;
-	font-weight: 400;
-	text-align: right;
-	color: var(--c-text);
-}
-
-.details-note {
-	font-size: 12px;
-	line-height: 1.8;
-	color: var(--c-text-muted);
-	margin: 8px 0 20px;
-}
-
 .text-action {
 	min-height: 44px;
 	display: inline-flex;
@@ -425,14 +361,6 @@ button:not(:disabled), summary {
 .text-action:hover {
 	text-decoration-color: var(--c-link);
 	color: var(--c-link);
-}
-
-.round-footer {
-	margin-top: 24px;
-	font-family: Georgia, "Times New Roman", serif;
-	font-style: italic;
-	color: var(--c-text-muted);
-	font-size: 14px;
 }
 
 .app-footer {
@@ -637,9 +565,6 @@ button:not(:disabled), summary {
 	.desktop-break {
 		display: none;
 	}
-	.today-details {
-		margin-top: 30px;
-	}
 	.app-footer {
 		margin: 0 24px;
 	}
@@ -673,3 +598,185 @@ button:not(:disabled), summary {
 
 
 .local-signup { display: flex; margin-top: 12px; }
+
+/* Frequently used attendance choices remain visible above the decorative art. */
+.today-secondary {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 210px;
+	align-items: center;
+	column-gap: 16px;
+	margin-top: 20px;
+}
+
+.attendance-options {
+	grid-column: 1;
+	grid-row: 1;
+	margin-top: 0;
+	border: 0;
+	padding: 0;
+}
+
+.attendance-options legend {
+	font-size: 13px;
+	color: var(--c-text-muted);
+	margin-bottom: 8px;
+}
+
+.attendance-choices {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 16px;
+}
+
+.attendance-option {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 44px;
+	padding: 4px 0;
+	border-bottom: 1px solid transparent;
+	font-size: 13px;
+	color: var(--c-text-muted);
+	cursor: pointer;
+}
+
+.attendance-option[data-selected="true"] {
+	color: var(--c-text);
+	border-color: var(--c-brand-lt);
+}
+
+.attendance-option input {
+	width: 14px;
+	height: 14px;
+	margin: 0;
+	accent-color: var(--c-brand);
+	flex-shrink: 0;
+}
+
+.attendance-option:has(input:disabled) {
+	cursor: default;
+}
+
+.attendance-option:has(input:focus-visible) {
+	outline: 2px solid var(--c-brand-lt);
+	outline-offset: 4px;
+}
+
+.attendance-option input:focus-visible {
+	outline: none;
+}
+
+.attendance-scope {
+	margin-top: 8px;
+	color: var(--c-text-muted);
+	font-size: 11px;
+	line-height: 1.6;
+}
+
+.round-actions {
+	grid-row: 2;
+	grid-column: 1 / -1;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 0 16px;
+	margin-top: 8px;
+	padding-top: 12px;
+	border-top: 1px solid var(--c-border);
+}
+
+.round-deadline {
+	color: var(--c-text-muted);
+	font-size: 12px;
+	line-height: 1.7;
+}
+
+.response-count {
+	font-size: 11px;
+	color: var(--c-text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.drink-artwork {
+	grid-column: 2;
+	grid-row: 1;
+	width: 100%;
+	height: 160px;
+	display: grid;
+	place-items: center;
+	margin-top: 0;
+	pointer-events: none;
+}
+
+.drink-artwork img {
+	display: block;
+	width: 240px;
+	height: 160px;
+	max-width: 100%;
+	object-fit: contain;
+	animation: artwork-arrive .24s ease-out;
+}
+
+.dark .drink-artwork img {
+	filter: brightness(.9) saturate(.85);
+}
+
+.today-page .sentence-section {
+	padding-top: 28px;
+}
+
+.today-page .drink-sentence {
+	min-height: 3.1em;
+}
+
+.today-page .sentence-hint {
+	margin-top: 16px;
+}
+
+@keyframes artwork-arrive {
+	from {
+		opacity: 0;
+		transform: translateY(3px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@media (max-width: 600px) {
+	.today-secondary {
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		margin-top: 20px;
+	}
+	.attendance-choices {
+		display: grid;
+		grid-template-columns: 1fr 1.65fr 1fr;
+		gap: 8px;
+	}
+	.attendance-option {
+		font-size: 12px;
+		line-height: 1.4;
+		gap: 6px;
+	}
+	.drink-artwork {
+		height: 168px;
+		margin-top: 8px;
+	}
+	.drink-artwork img {
+		width: 270px;
+		height: 180px;
+	}
+	.round-actions {
+		margin-top: 20px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.drink-artwork img {
+		animation: none;
+	}
+}
