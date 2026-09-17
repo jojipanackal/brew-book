@@ -48,6 +48,8 @@
 
   /* brand */
   --c-link:       #8c4e34;
+  --c-sugar-with: #a04432;
+  --c-sugar-without: #38634a;
   --c-brand:      #8c4e34;
   --c-brand-h:    #6d4938;
   --c-brand-lt:   #a56042;
@@ -94,6 +96,8 @@ html.dark {
   --c-text-err:   #e0826a;
 
   --c-link:       #d09060;
+  --c-sugar-with: #e69b85;
+  --c-sugar-without: #a0c5a4;
   --c-brand:      #a06840;
   --c-brand-h:    #b87848;
   --c-brand-lt:   #d09060;
@@ -306,7 +310,7 @@ button:not(:disabled), summary {
 	border-bottom: 1.5px solid var(--c-brand-lt);
 	border-radius: 0;
 	background: transparent;
-	color: var(--c-link);
+	color: var(--sentence-choice-color, var(--c-link));
 	font: inherit;
 	letter-spacing: inherit;
 	line-height: 1.12;
@@ -318,9 +322,22 @@ button:not(:disabled), summary {
 	display: none;
 }
 
+/* Preserve the choice color through hover, including sticky touch hover. */
 .sentence-choice:hover:not(:disabled) {
-	color: var(--c-text);
-	border-color: var(--c-text);
+	border-color: currentColor;
+	box-shadow: 0 1px 0 currentColor;
+}
+
+.sugar-choice {
+	border-color: currentColor;
+}
+
+.sugar-choice[aria-pressed="true"] {
+	--sentence-choice-color: var(--c-sugar-with);
+}
+
+.sugar-choice[aria-pressed="false"] {
+	--sentence-choice-color: var(--c-sugar-without);
 }
 
 .sentence-choice:disabled {
