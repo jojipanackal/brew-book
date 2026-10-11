@@ -2,7 +2,7 @@ import { loadDotenvx } from '../dotenvx'
 
 if (!process.env.DATABASE_URL) loadDotenvx()
 
-import { db } from '../src/db'
+import { closeDatabase, db } from '../src/db'
 import { company } from '../src/db/schema'
 import { ensureTodayResponses, todayKey } from '../src/lib/poll-responses'
 import { periods, type Period } from '../src/lib/drinks'
@@ -28,9 +28,12 @@ async function run() {
 }
 
 console.log('Poll initializer started (Asia/Kolkata)')
-void run()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error('Poll scheduler error:', error)
-    process.exit(1)
-  })
+
+try {
+  await run()
+} catch (error) {
+  console.error('Poll scheduler error:', error)
+  process.exitCode = 1
+} finally {
+  await closeDatabase()
+}

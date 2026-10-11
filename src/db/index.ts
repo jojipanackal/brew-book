@@ -10,3 +10,7 @@ loadDotenvx()
 const pool = new Pool(getPostgresConnectionConfig())
 
 export const db = drizzle(pool, { schema })
+
+export async function closeDatabase() {
+  await pool.end()
+}
