@@ -1,4 +1,5 @@
 import { Check, Coffee, X as XIcon } from "lucide-react";
+import { Dialog } from "radix-ui";
 import { useEffect, useRef, useState } from "react";
 import {
 	type Drink,
@@ -481,6 +482,11 @@ export function PollDetailsSheet({
 	polls: PollRecord[];
 	onClose: () => void;
 }) {
+	const returnFocus = useRef<HTMLElement | null>(
+		typeof document === "undefined"
+			? null
+			: (document.activeElement as HTMLElement),
+	);
 	const [sourceFilter, setSourceFilter] = useState<PollSource | "all">("all");
 	const [searchQuery, setSearchQuery] = useState("");
 	const [dragY, setDragY] = useState(0);
@@ -523,170 +529,186 @@ export function PollDetailsSheet({
 	}
 
 	return (
-		<div className="fixed inset-0 z-30 flex items-end overscroll-none bg-[var(--c-text)]/10 p-0 sm:items-center sm:justify-center sm:p-4">
-			<button
-				className="absolute inset-0 cursor-default bg-[var(--c-text)]/30 [touch-action:none]"
-				onClick={onClose}
-				type="button"
-				aria-label="Close poll details"
-			/>
-			<section
-				className="relative z-10 flex h-[75dvh] max-h-[75dvh] min-h-0 w-full flex-col rounded-t-3xl bg-[var(--c-card)] px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl overscroll-contain sm:h-auto sm:max-h-[88svh] sm:max-w-lg sm:rounded-2xl sm:p-6"
-				style={{
-					transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
-					transition: dragY === 0 ? "transform 0.25s ease" : "none",
-				}}
-			>
-				<div className="shrink-0 border-b border-[var(--c-border-2)] pb-4">
-					<div
-						className="[touch-action:none]"
-						onTouchStart={handleTouchStart}
-						onTouchMove={handleTouchMove}
-						onTouchEnd={handleTouchEnd}
+		<Dialog.Root
+			open
+			onOpenChange={(open) => {
+				if (!open) onClose();
+			}}
+		>
+			<Dialog.Portal>
+				<div className="fixed inset-0 z-50 flex items-end overscroll-none bg-[var(--c-text)]/10 p-0 sm:items-center sm:justify-center sm:p-4">
+					<Dialog.Overlay className="absolute inset-0 bg-black/30" />
+					<Dialog.Content
+						asChild
+						aria-describedby={undefined}
+						onCloseAutoFocus={(event) => {
+							event.preventDefault();
+							returnFocus.current?.focus();
+						}}
 					>
-						<div className="mx-auto mb-4 h-1 w-10 shrink-0 rounded-full bg-[var(--c-drag)] sm:hidden" />
-						<div className="flex items-start justify-between gap-3">
-							<div>
-								<p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--c-brand-lt)]">
-									{date === todayKey ? "Today" : displayDate(date)}
-								</p>
-								<h2 className="mt-1 font-serif text-2xl text-[var(--c-text-dark)]">
-									{periodInfo?.label ?? period}
-								</h2>
-								<p className="mt-1 text-sm text-[var(--c-text-dim)]">
-									{searchedPolls.length}{" "}
-									{searchedPolls.length === 1 ? "response" : "responses"}
-								</p>
-							</div>
-							<button
-								aria-label="Close poll details"
-								className="grid size-9 shrink-0 place-items-center rounded-full text-[var(--c-text-muted)] transition hover:bg-[var(--c-muted)] hover:text-[var(--c-text-mid)]"
-								onClick={onClose}
-								type="button"
-							>
-								<XIcon size={18} />
-							</button>
-						</div>
-					</div>
-					<div className="mt-4 grid grid-cols-4 gap-2">
-						{sourceFilters.map((filter) => (
-							<button
-								key={filter}
-								onClick={() => setSourceFilter(filter)}
-								type="button"
-								className={cx(
-									"min-h-9 rounded-lg border px-2 text-xs font-semibold capitalize transition",
-									sourceFilter === filter
-										? "border-[var(--c-brand)] bg-[var(--c-brand)] text-white"
-										: "border-[var(--c-border)] text-[var(--c-text-muted)] hover:bg-[var(--c-muted)]",
-								)}
-							>
-								{filter === "all" ? "All" : sourceLabel(filter)}
-							</button>
-						))}
-					</div>
-					<div className="relative mt-3">
-						<input
-							aria-label="Search poll responses"
-							className="h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-3 pr-10 text-sm outline-none focus:border-[var(--c-brand-lt)]"
-							onChange={(event) => setSearchQuery(event.target.value)}
-							placeholder="Search people by name or email"
-							value={searchQuery}
-						/>
-						{searchQuery && (
-							<button
-								aria-label="Clear poll response search"
-								className="absolute right-1 top-1 grid size-8 place-items-center rounded-md text-[var(--c-text-muted)] hover:bg-[var(--c-muted)]"
-								onClick={() => setSearchQuery("")}
-								type="button"
-							>
-								×
-							</button>
-						)}
-					</div>
-				</div>
-				<div className="no-scrollbar mt-4 min-h-0 flex-1 grid content-start gap-4 overflow-y-auto overscroll-contain [touch-action:pan-y]">
-					{awayPolls.length > 0 && !normalizedSearchQuery && (
-						<section>
-							<h3 className="mb-2 text-base font-semibold text-[var(--c-text-muted)]">
-								Not ordering this round
-							</h3>
-							<div className="grid gap-2">
-								{awayPolls.map((item) => (
-									<div
-										className="flex items-center justify-between rounded-xl bg-[var(--c-row)] px-3 py-2.5"
-										key={item.user.email}
-									>
-										<span className="min-w-0 truncate text-sm font-semibold">
-											{compactName(item.user)}
-										</span>
-										<span className="flex shrink-0 flex-wrap justify-end gap-1">
-											<MetaTag muted>
-												{availabilityLabel(item.availability[period])}
-											</MetaTag>
-											<MetaTag muted>
-												{sourceLabel(item.availabilitySources[period])}
-											</MetaTag>
-										</span>
-									</div>
-								))}
-							</div>
-						</section>
-					)}
-					{drinks.map((drink) => {
-						const drinkPolls = searchedPolls.filter(
-							(item) =>
-								item.availability[period] === "office" &&
-								item.choices[period] === drink,
-						);
-						const sugarFreeCount = drinkPolls.filter(
-							(item) => !item.sugar[period],
-						).length;
-						if (!drinkPolls.length) return null;
-						return (
-							<section key={drink}>
-								<h3 className="mb-2 flex items-center gap-2 text-base font-semibold text-[var(--c-brand)]">
-									{drink}
-									<span className="text-sm font-semibold text-[var(--c-text-dim)]">
-										{drinkPolls.length}
-										{sugarFreeCount ? ` (${sugarFreeCount} SF)` : ""}
-									</span>
-								</h3>
-								<div className="grid gap-2">
-									{drinkPolls.map((item) => (
-										<div
-											className="flex items-center justify-between gap-3 rounded-xl bg-[var(--c-row)] px-3 py-2.5"
-											key={item.user.email}
-										>
-											<div className="flex min-w-0 items-center gap-2.5">
-												<span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--c-avatar)] text-[11px] font-semibold text-[var(--c-text-mid)]">
-													{initials(compactName(item.user))}
-												</span>
-												<span className="truncate text-sm font-semibold">
-													{compactName(item.user)}
-												</span>
-											</div>
-											<span className="flex shrink-0 flex-wrap justify-end gap-1">
-												<MetaTag>
-													{item.sugar[period] ? "Sugar" : "No sugar"}
-												</MetaTag>
-												<MetaTag muted>
-													{sourceLabel(item.sources[period])}
-												</MetaTag>
-											</span>
+						<section
+							className="relative z-10 flex h-[75dvh] max-h-[75dvh] min-h-0 w-full flex-col rounded-t-3xl bg-[var(--c-card)] px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl overscroll-contain sm:h-auto sm:max-h-[88svh] sm:max-w-lg sm:rounded-2xl sm:p-6"
+							style={{
+								transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
+								transition: dragY === 0 ? "transform 0.25s ease" : "none",
+							}}
+						>
+							<div className="shrink-0 border-b border-[var(--c-border-2)] pb-4">
+								<div
+									className="[touch-action:none]"
+									onTouchStart={handleTouchStart}
+									onTouchMove={handleTouchMove}
+									onTouchEnd={handleTouchEnd}
+								>
+									<div className="mx-auto mb-4 h-1 w-10 shrink-0 rounded-full bg-[var(--c-drag)] sm:hidden" />
+									<div className="flex items-start justify-between gap-3">
+										<div>
+											<p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--c-brand-lt)]">
+												{date === todayKey ? "Today" : displayDate(date)}
+											</p>
+											<Dialog.Title asChild>
+												<h2 className="mt-1 font-serif text-2xl text-[var(--c-text-dark)]">
+													{periodInfo?.label ?? period}
+												</h2>
+											</Dialog.Title>
+											<p className="mt-1 text-sm text-[var(--c-text-dim)]">
+												{searchedPolls.length}{" "}
+												{searchedPolls.length === 1 ? "response" : "responses"}
+											</p>
 										</div>
+										<button
+											aria-label="Close poll details"
+											className="grid size-11 shrink-0 place-items-center rounded-full text-[var(--c-text-muted)] transition hover:bg-[var(--c-muted)] hover:text-[var(--c-text-mid)]"
+											onClick={onClose}
+											type="button"
+										>
+											<XIcon size={18} />
+										</button>
+									</div>
+								</div>
+								<div className="mt-4 grid grid-cols-4 gap-2">
+									{sourceFilters.map((filter) => (
+										<button
+											key={filter}
+											onClick={() => setSourceFilter(filter)}
+											aria-pressed={sourceFilter === filter}
+											type="button"
+											className={cx(
+												"min-h-9 rounded-lg border px-2 text-xs font-semibold capitalize transition",
+												sourceFilter === filter
+													? "border-[var(--c-brand)] bg-[var(--c-brand)] text-white"
+													: "border-[var(--c-border)] text-[var(--c-text-muted)] hover:bg-[var(--c-muted)]",
+											)}
+										>
+											{filter === "all" ? "All" : sourceLabel(filter)}
+										</button>
 									))}
 								</div>
-							</section>
-						);
-					})}
-					{searchedPolls.length === 0 && (
-						<p className="rounded-xl bg-[var(--c-row)] px-3 py-3 text-sm text-[var(--c-text-muted)]">
-							No responses found.
-						</p>
-					)}
+								<div className="relative mt-3">
+									<input
+										aria-label="Search poll responses"
+										className="h-10 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-card)] px-3 pr-10 text-sm outline-none focus:border-[var(--c-brand-lt)]"
+										onChange={(event) => setSearchQuery(event.target.value)}
+										placeholder="Search people by name or email"
+										value={searchQuery}
+									/>
+									{searchQuery && (
+										<button
+											aria-label="Clear poll response search"
+											className="absolute right-1 top-1 grid size-8 place-items-center rounded-md text-[var(--c-text-muted)] hover:bg-[var(--c-muted)]"
+											onClick={() => setSearchQuery("")}
+											type="button"
+										>
+											×
+										</button>
+									)}
+								</div>
+							</div>
+							<div className="no-scrollbar mt-4 min-h-0 flex-1 grid content-start gap-4 overflow-y-auto overscroll-contain [touch-action:pan-y]">
+								{awayPolls.length > 0 && !normalizedSearchQuery && (
+									<section>
+										<h3 className="mb-2 text-base font-semibold text-[var(--c-text-muted)]">
+											Not ordering this round
+										</h3>
+										<div className="grid gap-2">
+											{awayPolls.map((item) => (
+												<div
+													className="flex items-center justify-between rounded-xl bg-[var(--c-row)] px-3 py-2.5"
+													key={item.user.email}
+												>
+													<span className="min-w-0 truncate text-sm font-semibold">
+														{compactName(item.user)}
+													</span>
+													<span className="flex shrink-0 flex-wrap justify-end gap-1">
+														<MetaTag muted>
+															{availabilityLabel(item.availability[period])}
+														</MetaTag>
+														<MetaTag muted>
+															{sourceLabel(item.availabilitySources[period])}
+														</MetaTag>
+													</span>
+												</div>
+											))}
+										</div>
+									</section>
+								)}
+								{drinks.map((drink) => {
+									const drinkPolls = searchedPolls.filter(
+										(item) =>
+											item.availability[period] === "office" &&
+											item.choices[period] === drink,
+									);
+									const sugarFreeCount = drinkPolls.filter(
+										(item) => !item.sugar[period],
+									).length;
+									if (!drinkPolls.length) return null;
+									return (
+										<section key={drink}>
+											<h3 className="mb-2 flex items-center gap-2 text-base font-semibold text-[var(--c-brand)]">
+												{drink}
+												<span className="text-sm font-semibold text-[var(--c-text-dim)]">
+													{drinkPolls.length}
+													{sugarFreeCount ? ` (${sugarFreeCount} SF)` : ""}
+												</span>
+											</h3>
+											<div className="grid gap-2">
+												{drinkPolls.map((item) => (
+													<div
+														className="flex items-center justify-between gap-3 rounded-xl bg-[var(--c-row)] px-3 py-2.5"
+														key={item.user.email}
+													>
+														<div className="flex min-w-0 items-center gap-2.5">
+															<span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--c-avatar)] text-[11px] font-semibold text-[var(--c-text-mid)]">
+																{initials(compactName(item.user))}
+															</span>
+															<span className="truncate text-sm font-semibold">
+																{compactName(item.user)}
+															</span>
+														</div>
+														<span className="flex shrink-0 flex-wrap justify-end gap-1">
+															<MetaTag>
+																{item.sugar[period] ? "Sugar" : "No sugar"}
+															</MetaTag>
+															<MetaTag muted>
+																{sourceLabel(item.sources[period])}
+															</MetaTag>
+														</span>
+													</div>
+												))}
+											</div>
+										</section>
+									);
+								})}
+								{searchedPolls.length === 0 && (
+									<p className="rounded-xl bg-[var(--c-row)] px-3 py-3 text-sm text-[var(--c-text-muted)]">
+										No responses found.
+									</p>
+								)}
+							</div>
+						</section>
+					</Dialog.Content>
 				</div>
-			</section>
-		</div>
+			</Dialog.Portal>
+		</Dialog.Root>
 	);
 }

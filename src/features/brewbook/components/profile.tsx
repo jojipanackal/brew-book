@@ -63,24 +63,19 @@ export function ProfileView({
 }) {
 	const [defaultsOpen, setDefaultsOpen] = useState(false);
 	const [historyOpen, setHistoryOpen] = useState(false);
-	function tapAvatar() {
-		window.open("https://www.youtube.com/watch?v=xvFZjo5PgG0", "_blank");
-	}
 	return (
 		<div className="grid gap-3">
-			<PageHeader eyebrow="Account" title="Profile" />
+			<PageHeader eyebrow="Account" title="Preferences & history" />
 
 			{/* User card */}
 			<Card className="shadow-[0_8px_30px_rgba(77,57,38,0.04)]">
 				<div className="flex items-center gap-4 p-4">
-					<Button
-						type="button"
-						onClick={tapAvatar}
-						variant="ghost"
-						className="size-14 shrink-0 rounded-full bg-[var(--c-brand-pale)] p-0 text-lg font-semibold text-[var(--c-brand)]"
+					<span
+						aria-hidden="true"
+						className="grid size-12 shrink-0 place-items-center rounded-full bg-[var(--c-muted)] text-sm text-[var(--c-text-muted)]"
 					>
 						{initials(user.name)}
-					</Button>
+					</span>
 					<div className="min-w-0">
 						<p className="truncate font-semibold text-[var(--c-text-dark)]">
 							{user.name}
@@ -111,6 +106,8 @@ export function ProfileView({
 							<Button
 								type="button"
 								onClick={() => setDefaultsOpen((o) => !o)}
+								aria-expanded={defaultsOpen}
+								aria-controls="drink-defaults"
 								variant="ghost"
 								fullWidth
 								className="items-center justify-between rounded-none border-t border-[var(--c-border)] px-4 py-3.5 text-left text-sm font-semibold text-[var(--c-text-mid)]"
@@ -128,7 +125,10 @@ export function ProfileView({
 								/>
 							</Button>
 							{defaultsOpen && (
-								<div className="grid gap-3 border-t border-[var(--c-border)] px-4 py-4">
+								<div
+									id="drink-defaults"
+									className="grid gap-3 border-t border-[var(--c-border)] px-4 py-4"
+								>
 									{periodDetails.map((period) => (
 										<DefaultDrinkSetting
 											key={period.id}
@@ -156,6 +156,8 @@ export function ProfileView({
 					<Button
 						type="button"
 						onClick={() => setHistoryOpen((o) => !o)}
+						aria-expanded={historyOpen}
+						aria-controls="drink-history"
 						variant="ghost"
 						fullWidth
 						className="items-center justify-between rounded-none border-t border-[var(--c-border)] px-4 py-3.5 text-left text-sm font-semibold text-[var(--c-text-mid)]"
@@ -173,7 +175,10 @@ export function ProfileView({
 						/>
 					</Button>
 					{historyOpen && (
-						<div className="border-t border-[var(--c-border)]">
+						<div
+							id="drink-history"
+							className="border-t border-[var(--c-border)]"
+						>
 							<HistoryView
 								date={historyDate}
 								setDate={setHistoryDate}

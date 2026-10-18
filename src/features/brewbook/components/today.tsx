@@ -1,24 +1,10 @@
+import { useEffect, useState } from "react";
 import {
-	CalendarOff,
-	Check,
-	Coffee,
-	Eye,
-	Info,
-	X as XIcon,
-} from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import {
-	Banner,
-	Button,
-	Card,
-	IconButton,
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-	Spinner,
-	Switch,
 } from "#/components/ui";
 import {
 	type AttendanceStatus,
@@ -27,13 +13,36 @@ import {
 	drinks,
 	type Period,
 	type PollRecord,
-	periods,
+	type PollSource,
 	type SugarChoice,
 } from "#/lib/drinks";
-import { periodDetails, todayKey } from "../constants";
-import { countChoices, cx, displayDate } from "../utils";
-import { PageHeader, SugarToggle } from "./common";
-import { DrinkInfoSheet } from "./overlays";
+import { todayKey } from "../constants";
+import { displayDate } from "../utils";
+import { DrinkArtwork } from "./drink-artwork";
+
+export function minutesInIST() {
+	const parts = new Intl.DateTimeFormat("en-GB", {
+		hour: "2-digit",
+		minute: "2-digit",
+		hourCycle: "h23",
+		timeZone: "Asia/Kolkata",
+	}).formatToParts(new Date());
+	return (
+		Number(parts.find((p) => p.type === "hour")?.value) * 60 +
+		Number(parts.find((p) => p.type === "minute")?.value)
+	);
+}
+
+const attendanceLabels: Record<AttendanceStatus, string> = {
+	office: "In office",
+	wfh: "Working from home",
+	leave: "On leave",
+};
+const cutoffs: Record<Period, number> = { morning: 660, evening: 915 };
+const deadlines: Record<Period, string> = {
+	morning: "11:00 am",
+	evening: "3:15 pm",
+};
 
 export function TodayView({
 	entry,
@@ -46,7 +55,9 @@ export function TodayView({
 	availability = { morning: "office", evening: "office" },
 	onUpdateAvailability,
 	availabilityLoading = null,
-	pianoMode = false,
+	saving = false,
+	saveMessage = "",
+	sources,
 }: {
 	entry: DrinkChoice;
 	sugar: SugarChoice;
@@ -58,437 +69,214 @@ export function TodayView({
 	availability?: Record<Period, AttendanceStatus>;
 	onUpdateAvailability?: (period: Period, status: AttendanceStatus) => void;
 	availabilityLoading?: Period | null;
-	pianoMode?: boolean;
+	saving?: boolean;
+	saveMessage?: string;
+	sources?: Record<Period, PollSource>;
 }) {
-	// IST time for cutoff checks
-	const [nowIST, setNowIST] = useState(() => {
-		const d = new Date();
-		const [h, m] = new Intl.DateTimeFormat("en-IN", {
-			hour: "2-digit",
-			minute: "2-digit",
-			hour12: false,
-			timeZone: "Asia/Kolkata",
-		})
-			.format(d)
-			.split(":")
-			.map(Number);
-		return h * 60 + m;
-	});
+	const [now, setNow] = useState(minutesInIST);
+	const [period, setPeriod] = useState<Period>(() =>
+		minutesInIST() >= 660 ? "evening" : "morning",
+	);
 	useEffect(() => {
-		const id = setInterval(() => {
-			const d = new Date();
-			const [h, m] = new Intl.DateTimeFormat("en-IN", {
-				hour: "2-digit",
-				minute: "2-digit",
-				hour12: false,
-				timeZone: "Asia/Kolkata",
-			})
-				.format(d)
-				.split(":")
-				.map(Number);
-			setNowIST(h * 60 + m);
-		}, 30_000);
-		return () => clearInterval(id);
+		const timer = window.setInterval(() => setNow(minutesInIST()), 30_000);
+		return () => window.clearInterval(timer);
 	}, []);
-
-	const morningClosed = nowIST >= 11 * 60;
-	const eveningClosed = nowIST >= 15 * 60 + 15;
-
-	const isPeriodClosed = (id: Period) =>
-		id === "morning" ? morningClosed : eveningClosed;
-
-	// Twinkle Twinkle Little Star — C C G G A A G, F F E E D D C, ...
-	const TWINKLE = [
-		261.63, 261.63, 392.0, 392.0, 440.0, 440.0, 392.0, 349.23, 349.23, 329.63,
-		329.63, 293.66, 293.66, 261.63,
-	];
-	const pianoNoteIdx = useRef(0);
-	const audioCtxRef = useRef<AudioContext | null>(null);
-	function playPianoNote() {
-		if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
-		const ctx = audioCtxRef.current;
-		const osc = ctx.createOscillator();
-		const gain = ctx.createGain();
-		osc.connect(gain);
-		gain.connect(ctx.destination);
-		osc.type = "triangle";
-		osc.frequency.value = TWINKLE[pianoNoteIdx.current % TWINKLE.length];
-		pianoNoteIdx.current += 1;
-		gain.gain.setValueAtTime(0.5, ctx.currentTime);
-		gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-		osc.start(ctx.currentTime);
-		osc.stop(ctx.currentTime + 0.5);
-	}
-
-	function pianoSelect(period: Period, drink: Drink) {
-		playPianoNote();
-		updateEntry(period, drink);
-	}
-
+	const closed = now >= cutoffs[period];
+	const away = availability[period] !== "office";
+	const busy = saving || availabilityLoading !== null;
+	const disabled = closed || away;
+	const label = period === "morning" ? "Morning" : "Evening";
+	const source = sources?.[period];
 	return (
-		<div className="grid gap-5">
-			<PageHeader
-				eyebrow={displayDate(todayKey)}
-				title={pianoMode ? "Piano Mode" : "Today"}
-				action={pianoMode ? "tap to play" : `${todayPolls.length} people`}
-			/>
-			{!guest && (
-				<AvailabilityControl
-					availability={availability}
-					loading={availabilityLoading}
-					nowIST={nowIST}
-					onChange={onUpdateAvailability}
-				/>
-			)}
-			<div className="grid gap-3">
-				{(nowIST >= 12 * 60 ? [...periodDetails].reverse() : periodDetails).map(
-					(period) => (
-						<div key={period.id} className="grid gap-0">
-							<DrinkPoll
-								period={period}
-								closed={isPeriodClosed(period.id)}
-								closedMessage="Poll closed"
-								polls={todayPolls}
-								selected={entry[period.id]}
-								sugar={sugar[period.id]}
-								editable={
-									!isPeriodClosed(period.id) &&
-									availability[period.id] === "office"
-								}
-								onSelect={
-									isPeriodClosed(period.id)
-										? undefined
-										: (drink) =>
-												pianoMode
-													? pianoSelect(period.id, drink)
-													: updateEntry(period.id, drink)
-								}
-								onToggleSugar={
-									isPeriodClosed(period.id)
-										? undefined
-										: (next) => updateSugar(period.id, next)
-								}
-								onOpen={() => onOpen(period.id)}
-							/>
+		<div className="today-page">
+			<p className="eyebrow">{displayDate(todayKey)}</p>
+			<fieldset className="period-switch" aria-label="Drink round">
+				{(["morning", "evening"] as const).map((round) => (
+					<button
+						key={round}
+						type="button"
+						aria-pressed={period === round}
+						onClick={() => setPeriod(round)}
+					>
+						{round === "morning" ? "Morning" : "Evening"}
+						<span>{deadlines[round]}</span>
+					</button>
+				))}
+			</fieldset>
+			<section
+				className="sentence-section"
+				aria-label={`${label} drink`}
+				aria-busy={busy}
+			>
+				<h1 className="drink-sentence">
+					{away ? (
+						<>
+							I’m{" "}
+							{availability[period] === "leave"
+								? "on leave"
+								: "working from home"}
+							<br className="desktop-break" /> this {period}.
+						</>
+					) : (
+						<>
+							I’m having{" "}
+							<Select
+								value={entry[period]}
+								disabled={disabled}
+								onValueChange={(value) => {
+									if (!busy) updateEntry(period, value as Drink);
+								}}
+							>
+								<SelectTrigger
+									className="sentence-choice"
+									aria-disabled={disabled || busy}
+									onPointerDown={(event) => {
+										if (busy) event.preventDefault();
+									}}
+									onKeyDown={(event) => {
+										if (
+											busy &&
+											[" ", "Enter", "ArrowDown", "ArrowUp"].includes(event.key)
+										)
+											event.preventDefault();
+									}}
+									aria-label={`${label} drink`}
+									aria-describedby="round-note"
+								>
+									<SelectValue>{entry[period].toLowerCase()}</SelectValue>
+								</SelectTrigger>
+								<SelectContent position="popper" align="start">
+									{drinks.map((drink) => (
+										<SelectItem
+											className="min-h-11 pr-9"
+											key={drink}
+											value={drink}
+										>
+											{drink}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>{" "}
+							today
+							{entry[period] === "No drink" ? (
+								"."
+							) : (
+								<>
+									,<br className="desktop-break" />{" "}
+									<button
+										className="sentence-choice sugar-choice"
+										type="button"
+										disabled={disabled}
+										aria-label={`${label}: ${sugar[period] ? "with" : "without"} sugar`}
+										aria-disabled={disabled || busy}
+										aria-pressed={sugar[period]}
+										aria-describedby="round-note"
+										onClick={() => {
+											if (!busy) updateSugar(period, !sugar[period]);
+										}}
+									>
+										{sugar[period] ? "with" : "without"}
+									</button>{" "}
+									sugar.
+								</>
+							)}
+						</>
+					)}
+				</h1>
+				<p id="round-note" className="sentence-hint">
+					{closed
+						? `${label} orders closed at ${deadlines[period]} IST.`
+						: away
+							? "No drink will be ordered for this round."
+							: "Tap the underlined words to make it yours."}
+				</p>
+				<output className="save-status" aria-live="polite" aria-atomic="true">
+					{busy
+						? "Saving your choice…"
+						: saveMessage ||
+							(away
+								? attendanceLabels[availability[period]]
+								: source === "default"
+									? "Your usual choice, added automatically."
+									: source === "admin"
+										? "Updated by your administrator."
+										: source === "manual"
+											? "Your choice is saved for today."
+											: "Your usual choice for this round.")}
+				</output>
+			</section>
+			<div className="today-secondary">
+				{!guest && (
+					<fieldset
+						className="attendance-options"
+						aria-describedby="attendance-scope"
+					>
+						<legend>This {period}, I’m</legend>
+						<div className="attendance-choices">
+							{(Object.keys(attendanceLabels) as AttendanceStatus[]).map(
+								(status) => (
+									<label
+										key={status}
+										className="attendance-option"
+										data-selected={availability[period] === status}
+									>
+										<input
+											type="radio"
+											name="attendance"
+											value={status}
+											checked={availability[period] === status}
+											disabled={closed || !onUpdateAvailability}
+											aria-disabled={closed || busy || !onUpdateAvailability}
+											onClick={(event) => {
+												if (busy) event.preventDefault();
+											}}
+											onKeyDown={(event) => {
+												if (
+													busy &&
+													[
+														" ",
+														"ArrowDown",
+														"ArrowUp",
+														"ArrowLeft",
+														"ArrowRight",
+													].includes(event.key)
+												)
+													event.preventDefault();
+											}}
+											onChange={() => {
+												if (!busy) onUpdateAvailability?.(period, status);
+											}}
+										/>
+										<span>{attendanceLabels[status]}</span>
+									</label>
+								),
+							)}
 						</div>
-					),
+						<p id="attendance-scope" className="attendance-scope">
+							{closed
+								? "Attendance is closed for this round."
+								: `Applies to this ${period} only.`}
+						</p>
+					</fieldset>
 				)}
+				<div className="round-actions">
+					<p className="round-deadline">
+						{closed
+							? "This round is complete."
+							: `Changes until ${deadlines[period]} IST.`}
+					</p>
+					<button
+						type="button"
+						className="text-action"
+						onClick={() => onOpen(period)}
+					>
+						View responses{" "}
+						<span className="response-count">{todayPolls.length}</span>
+						<span aria-hidden="true">↗</span>
+					</button>
+				</div>
+				<DrinkArtwork drink={entry[period]} away={away} />
 			</div>
 		</div>
 	);
 }
-
-function AvailabilityControl({
-	availability,
-	loading,
-	nowIST,
-	onChange,
-}: {
-	availability: Record<Period, AttendanceStatus>;
-	loading: Period | null;
-	nowIST: number;
-	onChange?: (period: Period, status: AttendanceStatus) => void;
-}) {
-	const labels: Record<AttendanceStatus, string> = {
-		office: "In office",
-		wfh: "Working from home",
-		leave: "On leave",
-	};
-	const visiblePeriods = periods.filter((period) =>
-		period === "morning" ? nowIST < 11 * 60 : nowIST < 15 * 60 + 15,
-	);
-	const hasMultiplePeriods = periods.length > 1;
-
-	const [open, setOpen] = useState(false);
-	const [halfDay, setHalfDay] = useState(false);
-	const [pending, setPending] = useState<
-		Array<{ period: Period; status: AttendanceStatus }>
-	>([]);
-
-	useEffect(() => {
-		if (!open) setPending([]);
-	}, [open]);
-
-	useEffect(() => {
-		if (!open || loading !== null || pending.length === 0) return;
-		const next = pending[0];
-		setPending((q) => q.slice(1));
-		onChange?.(next.period, next.status);
-	}, [open, loading, pending, onChange]);
-
-	if (visiblePeriods.length === 0) return null;
-
-	function handleOpen() {
-		setHalfDay(
-			hasMultiplePeriods && availability.morning !== availability.evening,
-		);
-		setOpen(true);
-	}
-
-	function setPeriodStatus(period: Period, status: AttendanceStatus) {
-		onChange?.(period, status);
-	}
-
-	function setFullDayStatus(status: AttendanceStatus) {
-		if (visiblePeriods.length === 0) return;
-		setPeriodStatus(visiblePeriods[0], status);
-		if (visiblePeriods.length > 1) {
-			setPending([{ period: visiblePeriods[1], status }]);
-		}
-	}
-
-	return (
-		<>
-			<Button
-				type="button"
-				variant="primary"
-				fullWidth
-				onClick={handleOpen}
-				className="gap-2"
-			>
-				<CalendarOff size={17} />
-				Mark your absence
-			</Button>
-			{open && (
-				<div className="fixed inset-0 z-40 flex items-center justify-center overscroll-none bg-[var(--c-text)]/10 p-4">
-					<button
-						type="button"
-						className="absolute inset-0 cursor-default bg-[var(--c-text)]/30"
-						onClick={() => setOpen(false)}
-						aria-label="Close"
-					/>
-					<section className="relative z-10 w-full max-w-md rounded-2xl bg-[var(--c-card)] p-5 shadow-2xl">
-						<div className="mb-4 flex items-center justify-between">
-							<h2 className="font-serif text-lg font-semibold text-[var(--c-text-dark)]">
-								Mark your absence
-							</h2>
-							<button
-								type="button"
-								className="grid size-9 place-items-center rounded-full text-[var(--c-text-muted)] transition hover:bg-[var(--c-muted)] hover:text-[var(--c-text-mid)]"
-								onClick={() => setOpen(false)}
-								aria-label="Close"
-							>
-								<XIcon size={18} />
-							</button>
-						</div>
-						{hasMultiplePeriods && (
-							<label
-								htmlFor="leave-halfday"
-								className="mb-4 flex items-center justify-between gap-3 text-sm font-semibold text-[var(--c-text-mid)]"
-							>
-								<span>Half day</span>
-								<Switch
-									id="leave-halfday"
-									checked={halfDay}
-									onCheckedChange={setHalfDay}
-									disabled={loading !== null}
-								/>
-							</label>
-						)}
-						<div className="grid gap-3">
-							{halfDay ? (
-								periods.map((period) => (
-									<label
-										key={period}
-										htmlFor={`leave-${period}`}
-										className="grid gap-1.5 text-xs font-semibold text-[var(--c-text-muted)]"
-									>
-										<span>{period === "morning" ? "Morning" : "Evening"}</span>
-										<Select
-											disabled={
-												loading !== null || !visiblePeriods.includes(period)
-											}
-											value={availability[period]}
-											onValueChange={(value) =>
-												setPeriodStatus(period, value as AttendanceStatus)
-											}
-										>
-											<SelectTrigger id={`leave-${period}`} className="px-2">
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												{(Object.keys(labels) as AttendanceStatus[]).map(
-													(status) => (
-														<SelectItem key={status} value={status}>
-															{labels[status]}
-														</SelectItem>
-													),
-												)}
-											</SelectContent>
-										</Select>
-										{loading === period && (
-											<Spinner className="size-4 text-[var(--c-brand-lt)]" />
-										)}
-									</label>
-								))
-							) : (
-								<label
-									htmlFor="leave-full"
-									className="grid gap-1.5 text-xs font-semibold text-[var(--c-text-muted)]"
-								>
-									<span>Full day</span>
-									<Select
-										disabled={loading !== null}
-										value={availability[visiblePeriods[0]]}
-										onValueChange={(value) =>
-											setFullDayStatus(value as AttendanceStatus)
-										}
-									>
-										<SelectTrigger id="leave-full" className="px-2">
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{(Object.keys(labels) as AttendanceStatus[]).map(
-												(status) => (
-													<SelectItem key={status} value={status}>
-														{labels[status]}
-													</SelectItem>
-												),
-											)}
-										</SelectContent>
-									</Select>
-									{loading !== null && (
-										<Spinner className="size-4 text-[var(--c-brand-lt)]" />
-									)}
-								</label>
-							)}
-						</div>
-					</section>
-				</div>
-			)}
-		</>
-	);
-}
-
-function DrinkPoll({
-	period,
-	closed = false,
-	closedMessage = "Poll closed",
-	polls,
-	selected,
-	sugar,
-	editable,
-	onSelect,
-	onToggleSugar,
-	onOpen,
-}: {
-	period: { id: Period; label: string; helper: string };
-	closed?: boolean;
-	closedMessage?: string;
-	polls: PollRecord[];
-	selected?: Drink;
-	sugar: boolean;
-	editable: boolean;
-	onSelect?: (drink: Drink) => void;
-	onToggleSugar?: (sugar: boolean) => void;
-	onOpen?: () => void;
-}) {
-	const activePolls = polls.filter(
-		(entry) => entry.availability[period.id] === "office",
-	);
-	const counts = countChoices(activePolls.map((entry) => entry.choices))[
-		period.id
-	];
-	const unavailableCount = polls.length - activePolls.length;
-	const total = activePolls.length;
-	const [infoDrink, setInfoDrink] = useState<Drink | null>(null);
-	return (
-		<Card className="overflow-hidden">
-			<div className="flex items-center justify-between gap-4 border-b border-[var(--c-border-2)] px-4 py-3.5 sm:px-5">
-				<span className="flex items-center gap-2.5">
-					<span className="grid size-8 place-items-center rounded-lg bg-[var(--c-muted)] text-[var(--c-brand-lt)]">
-						<Coffee size={16} />
-					</span>
-					<span>
-						<span className="block text-sm font-semibold text-[var(--c-text-dark)]">
-							{period.label}
-						</span>
-						<span className="block text-xs text-[var(--c-text-dim)]">
-							{total} {total === 1 ? "response" : "responses"}
-							{unavailableCount ? ` · ${unavailableCount} away` : ""}
-						</span>
-					</span>
-				</span>
-				<SugarToggle
-					compact
-					disabled={closed || selected === "No drink"}
-					sugar={sugar}
-					onChange={onToggleSugar ?? (() => undefined)}
-				/>
-			</div>
-			{closed && (
-				<Banner variant="error" dot>
-					{closedMessage}
-				</Banner>
-			)}
-			<div className="grid gap-2 p-3 sm:p-4">
-				{drinks.map((drink) => {
-					const count = counts[drink];
-					const percent = total ? Math.round((counts[drink] / total) * 100) : 0;
-					return (
-						<div key={drink} className="flex items-center gap-1">
-							<Button
-								disabled={!editable}
-								onClick={() => onSelect?.(drink)}
-								type="button"
-								variant="outline"
-								className={cx(
-									"relative min-h-11 flex-1 items-center justify-between overflow-hidden text-left",
-									editable
-										? "hover:border-[var(--c-border-3)]"
-										: "cursor-default",
-									selected === drink
-										? "border-[var(--c-brand-lt)] bg-[var(--c-accent-bg)] text-[var(--c-text-mid)]"
-										: "",
-								)}
-							>
-								<span
-									className="absolute inset-y-0 left-0 bg-[var(--c-accent-bg)] transition-all"
-									style={{
-										width: editable
-											? selected === drink
-												? "100%"
-												: "0%"
-											: `${percent}%`,
-									}}
-								/>
-								<span className="relative">{drink}</span>
-								<span className="relative flex items-center gap-2 text-xs text-[var(--c-text-muted)]">
-									{count}
-									{selected === drink && (
-										<span className="grid size-5 place-items-center rounded-full bg-[var(--c-brand-lt)] text-white">
-											<Check size={13} strokeWidth={3} />
-										</span>
-									)}
-								</span>
-							</Button>
-							<IconButton
-								onClick={() => setInfoDrink(drink)}
-								className="size-7 shrink-0 opacity-60 hover:opacity-100"
-								aria-label={`Info about ${drink}`}
-							>
-								<Info size={14} />
-							</IconButton>
-						</div>
-					);
-				})}
-			</div>
-			{onOpen && (
-				<Button
-					variant="secondary"
-					className="mx-3 mb-3 w-[calc(100%-1.5rem)] sm:mx-4 sm:mb-4 sm:w-[calc(100%-2rem)]"
-					onClick={onOpen}
-					type="button"
-				>
-					<Eye size={16} />
-					View details
-				</Button>
-			)}
-			{infoDrink && (
-				<DrinkInfoSheet drink={infoDrink} onClose={() => setInfoDrink(null)} />
-			)}
-		</Card>
-	);
-}
-
-// Parse a CSS hex color to normalized RGB
