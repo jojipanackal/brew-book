@@ -30,7 +30,9 @@ import {
 	periods,
 	type SugarChoice,
 } from "#/lib/drinks";
-import { periodDetails, todayKey } from "../constants";
+import { pollCutoffs } from "#/lib/poll-clock";
+import { periodDetails } from "../constants";
+import { usePollClock } from "../hooks/use-poll-clock";
 import { countChoices, cx, displayDate } from "../utils";
 import { PageHeader, SugarToggle } from "./common";
 import { DrinkInfoSheet } from "./overlays";
@@ -60,39 +62,9 @@ export function TodayView({
 	availabilityLoading?: Period | null;
 	pianoMode?: boolean;
 }) {
-	// IST time for cutoff checks
-	const [nowIST, setNowIST] = useState(() => {
-		const d = new Date();
-		const [h, m] = new Intl.DateTimeFormat("en-IN", {
-			hour: "2-digit",
-			minute: "2-digit",
-			hour12: false,
-			timeZone: "Asia/Kolkata",
-		})
-			.format(d)
-			.split(":")
-			.map(Number);
-		return h * 60 + m;
-	});
-	useEffect(() => {
-		const id = setInterval(() => {
-			const d = new Date();
-			const [h, m] = new Intl.DateTimeFormat("en-IN", {
-				hour: "2-digit",
-				minute: "2-digit",
-				hour12: false,
-				timeZone: "Asia/Kolkata",
-			})
-				.format(d)
-				.split(":")
-				.map(Number);
-			setNowIST(h * 60 + m);
-		}, 30_000);
-		return () => clearInterval(id);
-	}, []);
-
-	const morningClosed = nowIST >= 11 * 60;
-	const eveningClosed = nowIST >= 15 * 60 + 15;
+	const { date: todayKey, minutes: nowIST } = usePollClock();
+	const morningClosed = nowIST >= pollCutoffs.morning;
+	const eveningClosed = nowIST >= pollCutoffs.evening;
 
 	const isPeriodClosed = (id: Period) =>
 		id === "morning" ? morningClosed : eveningClosed;
@@ -194,8 +166,8 @@ function AvailabilityControl({
 		wfh: "Working from home",
 		leave: "On leave",
 	};
-	const visiblePeriods = periods.filter((period) =>
-		period === "morning" ? nowIST < 11 * 60 : nowIST < 15 * 60 + 15,
+	const visiblePeriods = periods.filter(
+		(period) => nowIST < pollCutoffs[period],
 	);
 	const hasMultiplePeriods = periods.length > 1;
 

@@ -13,9 +13,9 @@ import {
 	drinkInfo,
 	periodDetails,
 	sourceFilters,
-	todayKey,
 } from "../constants";
 import { useGyroscope } from "../hooks/use-gyroscope";
+import { usePollClock } from "../hooks/use-poll-clock";
 import {
 	availabilityLabel,
 	compactName,
@@ -481,6 +481,7 @@ export function PollDetailsSheet({
 	polls: PollRecord[];
 	onClose: () => void;
 }) {
+	const { date: todayKey } = usePollClock();
 	const [sourceFilter, setSourceFilter] = useState<PollSource | "all">("all");
 	const [searchQuery, setSearchQuery] = useState("");
 	const [dragY, setDragY] = useState(0);

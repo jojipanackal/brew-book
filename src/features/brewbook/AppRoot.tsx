@@ -37,7 +37,9 @@ import { GlassEasterEgg, PollDetailsSheet } from "./components/overlays";
 import { ProfileView } from "./components/profile";
 import { StatsView } from "./components/stats";
 import { TodayView } from "./components/today";
-import { brewingMessages, initialState, todayKey } from "./constants";
+import { brewingMessages, initialState } from "./constants";
+import { usePollClock } from "./hooks/use-poll-clock";
+import { usePollEvents } from "./hooks/use-poll-events";
 import { useTheme } from "./hooks/use-theme";
 import type { AppState, OnboardingState, OpenPoll, View } from "./types";
 import {
@@ -72,6 +74,7 @@ function AppErrorFallback() {
 export default App;
 
 function App() {
+	const { date: todayKey } = usePollClock();
 	const { dark, toggle: toggleTheme } = useTheme();
 	const [state, setState] = useState<AppState>(readState);
 	const [view, setView] = useState<View>("today");
@@ -272,7 +275,7 @@ function App() {
 				user: guestSession.user,
 				defaults: guestSession.defaults,
 				sugarDefaults: guestSession.sugarDefaults,
-				entries: { [todayKey]: guestSession.responses },
+				entries: { [guestSession.date]: guestSession.responses },
 			});
 			setOnboarding(null);
 			setProfileReady(true);
@@ -369,62 +372,49 @@ function App() {
 		sessionUserId,
 		sessionUserImage,
 		sessionUserName,
+		todayKey,
 	]);
-	useEffect(() => {
-		if (!state.user?.role || state.user.role !== "admin" || view !== "admin")
-			return;
-		void getAdminDashboard()
-			.then(setAdminData)
-			.catch((reason: unknown) =>
-				setError(reportSentryError(reason, "Unable to load admin view")),
-			);
-	}, [state.user?.role, view]);
-	useEffect(() => {
-		if ((!sessionUserId && !guestSession) || !profileReady || view !== "today")
-			return;
-		let cancelled = false;
-		const refreshToday = () => {
-			void getDrinkDay(todayKey)
-				.then((day) => {
-					if (cancelled) return;
-					setState((current) => ({
-						...current,
-						defaults: day.defaults,
-						sugarDefaults: day.sugarDefaults,
-						entries: { ...current.entries, [todayKey]: day.responses },
-					}));
-					setError(null);
-				})
-				.catch((reason: unknown) => {
-					if (!cancelled)
-						setError(reportSentryError(reason, "Unable to refresh today"));
-				});
-		};
-		const interval = window.setInterval(refreshToday, 4000);
-		return () => {
-			cancelled = true;
-			window.clearInterval(interval);
-		};
-	}, [guestSession, profileReady, sessionUserId, view]);
-	useEffect(() => {
-		if (state.user?.role !== "admin" || view !== "admin") return;
-		let cancelled = false;
-		const refreshAdmin = () => {
-			void getAdminDashboard()
-				.then((data) => {
-					if (!cancelled) setAdminData(data);
-				})
-				.catch((reason: unknown) => {
-					if (!cancelled)
-						setError(reportSentryError(reason, "Unable to refresh admin view"));
-				});
-		};
-		const interval = window.setInterval(refreshAdmin, 4000);
-		return () => {
-			cancelled = true;
-			window.clearInterval(interval);
-		};
-	}, [state.user?.role, view]);
+	const liveIdentity =
+		profileReady &&
+		!accessDenied &&
+		!onboarding &&
+		(sessionUserId || guestSession?.status === "approved")
+			? `${sessionUserId ?? guestSession?.user.id}:${view}:${todayKey}:${historyDate}:${openPoll?.date ?? ""}`
+			: null;
+	usePollEvents(liveIdentity, async (signal) => {
+		try {
+			if (state.user?.role === "admin" && view === "admin") {
+				const data = await getAdminDashboard(signal);
+				if (!signal.aborted) setAdminData(data);
+			} else {
+				const date =
+					openPoll?.date ?? (view === "profile" ? historyDate : todayKey);
+				const day = await getDrinkDay(date, signal);
+				if (signal.aborted) return;
+				setState((current) => ({
+					...current,
+					defaults: day.defaults,
+					sugarDefaults: day.sugarDefaults,
+					user:
+						current.user && date === todayKey
+							? {
+									...current.user,
+									availability:
+										day.responses.find(
+											(entry) => entry.user.email === current.user?.email,
+										)?.availability ?? day.availability,
+								}
+							: current.user,
+					entries: { ...current.entries, [date]: day.responses },
+				}));
+			}
+			if (!signal.aborted) setError(null);
+		} catch (reason) {
+			if (!signal.aborted)
+				setError(reportSentryError(reason, "Unable to refresh live data"));
+			throw reason;
+		}
+	});
 	useEffect(() => {
 		if (!sessionUserId && !guestSession) return;
 		let cancelled = false;
