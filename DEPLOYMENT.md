@@ -70,28 +70,23 @@ Log in once from the VPS if the GitHub package is private:
 echo "$GHCR_PAT" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
 ```
 
-The container listens only on `127.0.0.1:3003`. Put Nginx, Caddy, or another reverse proxy in front of it and proxy the public HTTPS domain to `http://127.0.0.1:3003`.
+The container listens only on `127.0.0.1:3003`. Caddy terminates public HTTPS and proxies requests to `http://127.0.0.1:3003` when running directly on the VPS host:
+
+```caddyfile
+brewbook.example.com {
+    reverse_proxy 127.0.0.1:3003
+}
+```
+
+Replace the example domain with your production domain. If Caddy runs in Docker on the shared `apps` network, use `reverse_proxy app:3003` instead: `127.0.0.1` inside Caddy's container points to Caddy itself, not the BrewBook container. Keep your existing working upstream address if already configured.
 
 ### Live poll updates (SSE)
 
 Today and Admin use one authenticated `/api/events` stream per active tab instead of four-second polling. The stream carries invalidations only; clients fetch fresh, authorized snapshots on changes, reconnect, and returning to the tab. Heartbeats are sent every 20 seconds and permissions are rechecked every minute. Pending guest approval still uses its existing five-second polling.
 
-For Nginx, disable buffering/caching and allow long-lived connections for this endpoint (retain your usual forwarding headers):
+Caddy automatically flushes responses with `Content-Type: text/event-stream`, which `/api/events` already sends. The standard `reverse_proxy` configuration above supports SSE without a separate route or `flush_interval` setting. See [Caddy's streaming documentation](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy#streaming).
 
-```nginx
-location = /api/events {
-    proxy_pass http://127.0.0.1:3003;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header Connection "";
-    proxy_buffering off;
-    proxy_cache off;
-    proxy_read_timeout 90s;
-    gzip off;
-}
-```
-
-The application also sends `X-Accel-Buffering: no` and `Cache-Control: no-cache, no-transform`. Ensure any other proxy/CDN forwards the stream without buffering or caching.
+Do not enable `response_buffers` for `/api/events` or configure short stream/read/write timeouts that would cut off the connection. The application sends `Cache-Control: no-cache, no-transform`; ensure any additional proxy/CDN forwards the stream without buffering or caching. The `X-Accel-Buffering: no` response header is an Nginx compatibility hint and requires no Caddy configuration.
 
 The Nitro startup plugin reconciles daily responses at startup and midnight IST, and notifies clients at the 11:00/15:15 cutoffs. Failed reconciliation retries after 30 seconds; reads retain idempotent initialization as recovery. Browser dates/cutoffs update locally without HTTP polling.
 
