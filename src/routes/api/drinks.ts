@@ -6,6 +6,7 @@ import { attendance, drinkDefault, drinkResponse, user } from '#/db/schema'
 import { auth } from '#/lib/auth'
 import { drinks, periods, type AttendanceStatus, type Drink, type DrinkChoice, type Period, type PollSource, type SugarChoice } from '#/lib/drinks'
 import { currentlyOpenPeriods, ensureTodayResponses, openPeriodsForToday, todayKey } from '#/lib/poll-responses'
+import { refreshUserPolls } from '#/lib/poll-updates'
 
 function json(data: unknown, init?: ResponseInit) {
   return Response.json(data, init)
@@ -110,9 +111,8 @@ export const Route = createFileRoute('/api/drinks')({
         const currentUserCompany = await db.select({ companyId: user.companyId }).from(user).where(eq(user.id, currentUser.id)).limit(1)
         const companyId = currentUserCompany[0]?.companyId
         if (!companyId) return json({ error: 'Your account is not assigned to a company' }, { status: 403 })
-        const beforeEnsure = await readDay(currentUser.id, requestedDate)
         await ensureTodayResponses(companyId, requestedDate, openPeriodsForToday())
-        const day = requestedDate === todayKey() ? await readDay(currentUser.id, requestedDate) : beforeEnsure
+        const day = await readDay(currentUser.id, requestedDate)
         return json({ date: requestedDate, ...day })
       },
       PUT: async ({ request }) => {
@@ -125,6 +125,7 @@ export const Route = createFileRoute('/api/drinks')({
           const sugar = body.drink === 'No drink' ? true : body.sugar
           await db.insert(drinkDefault).values({ userId: currentUser.id, period: body.period, drink: body.drink, sugar }).onConflictDoUpdate({ target: [drinkDefault.userId, drinkDefault.period], set: { drink: body.drink, sugar, updatedAt: new Date() } })
           await db.update(drinkResponse).set({ drink: body.drink, sugar, updatedAt: new Date() }).where(and(eq(drinkResponse.userId, currentUser.id), eq(drinkResponse.date, todayKey()), eq(drinkResponse.period, body.period), eq(drinkResponse.source, 'default'), inArray(drinkResponse.period, currentlyOpenPeriods())))
+          await refreshUserPolls(currentUser.id)
           const rows = await db.select({ period: drinkDefault.period, drink: drinkDefault.drink, sugar: drinkDefault.sugar }).from(drinkDefault).where(eq(drinkDefault.userId, currentUser.id))
           return json(defaultsFromRows(rows))
         }
@@ -135,6 +136,7 @@ export const Route = createFileRoute('/api/drinks')({
           const defaults = await readDay(currentUser.id, body.date)
           const sugar = body.drink === 'No drink' ? true : body.sugar
           await db.insert(drinkResponse).values({ id: crypto.randomUUID(), userId: currentUser.id, date: body.date, period: body.period, drink: body.drink, sugar, source: 'manual' }).onConflictDoUpdate({ target: [drinkResponse.userId, drinkResponse.date, drinkResponse.period], set: { drink: body.drink, sugar, source: 'manual', updatedAt: new Date() } })
+          await refreshUserPolls(currentUser.id, body.date)
           const day = await readDay(currentUser.id, body.date)
           return json({ date: body.date, ...day, defaults: defaults.defaults })
         }

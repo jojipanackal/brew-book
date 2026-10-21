@@ -72,6 +72,33 @@ echo "$GHCR_PAT" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
 
 The container listens only on `127.0.0.1:3003`. Put Nginx, Caddy, or another reverse proxy in front of it and proxy the public HTTPS domain to `http://127.0.0.1:3003`.
 
+### Live poll updates (SSE)
+
+Today and Admin use one authenticated `/api/events` stream per active tab instead of four-second polling. The stream carries invalidations only; clients fetch fresh, authorized snapshots on changes, reconnect, and returning to the tab. Heartbeats are sent every 20 seconds and permissions are rechecked every minute. Pending guest approval still uses its existing five-second polling.
+
+For Nginx, disable buffering/caching and allow long-lived connections for this endpoint (retain your usual forwarding headers):
+
+```nginx
+location = /api/events {
+    proxy_pass http://127.0.0.1:3003;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 90s;
+    gzip off;
+}
+```
+
+The application also sends `X-Accel-Buffering: no` and `Cache-Control: no-cache, no-transform`. Ensure any other proxy/CDN forwards the stream without buffering or caching.
+
+The Nitro startup plugin reconciles daily responses at startup and midnight IST, and notifies clients at the 11:00/15:15 cutoffs. Failed reconciliation retries after 30 seconds; reads retain idempotent initialization as recovery. Browser dates/cutoffs update locally without HTTP polling.
+
+**Deployment constraint:** notifications are in-process. Run one Node app process/container, as in this Compose file. Before adding replicas, clustered workers, or external database writers, introduce shared notifications (for example PostgreSQL `LISTEN/NOTIFY`) and coordinated scheduling. Direct database edits do not currently emit SSE events.
+
+Run `pnpm test` for the clock, scheduler, stream scoping/lifecycle, and refresh-coalescing tests. Before rollout, test two signed-in tabs: change a vote, attendance, defaults, and an admin response; verify the other tab updates and that an idle tab makes no repeating snapshot requests. Also test reconnect, guest expiry, overnight rollover, and two-company isolation through the production proxy.
+
 ## Push notifications (postponed)
 
 The systemd push-notification workers are currently postponed. The deployment workflow does not upload, install, or start any systemd units.

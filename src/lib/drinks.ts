@@ -58,8 +58,8 @@ async function request<T>(input: RequestInfo | URL, init?: RequestInit): Promise
   return response.json() as Promise<T>
 }
 
-export function getDrinkDay(date: string) {
-  return request<DrinkDay>(`/api/drinks?date=${encodeURIComponent(date)}`)
+export function getDrinkDay(date: string, signal?: AbortSignal) {
+  return request<DrinkDay>(`/api/drinks?date=${encodeURIComponent(date)}`, { signal })
 }
 
 export function saveResponse(input: { date: string; period: Period; drink: Drink; sugar: boolean }) {
@@ -107,8 +107,8 @@ export function getStats(days = 30) {
   return request<import('#/routes/api/stats').StatsResponse>(`/api/stats?days=${days}`)
 }
 
-export function getAdminDashboard() {
-  return request<AdminDashboard>('/api/admin')
+export function getAdminDashboard(signal?: AbortSignal) {
+  return request<AdminDashboard>('/api/admin', { signal })
 }
 
 export function updateGuestRequest(input: { type: 'approve' | 'reject' | 'removeGuest'; userId: string }) {

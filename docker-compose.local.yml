@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: localpassword
       POSTGRES_DB: brewdb
     ports:
-      - "127.0.0.1:5433:5432"
+      - "127.0.0.1:5434:5432"
     volumes:
       - brew-book-postgres-data:/var/lib/postgresql/data
     healthcheck:

@@ -5,6 +5,8 @@ import { db } from '#/db'
 import { attendance, company, companyAdmin, drinkDefault, drinkResponse, user } from '#/db/schema'
 import { auth } from '#/lib/auth'
 import { drinks, periods, type AttendanceStatus, type Company, type Drink, type DrinkChoice, type Period, type SugarChoice } from '#/lib/drinks'
+import { publishPollChange } from '#/lib/poll-events'
+import { refreshUserPolls } from '#/lib/poll-updates'
 
 function json(data: unknown, init?: ResponseInit) {
   return Response.json(data, init)
@@ -87,6 +89,7 @@ async function claimGuestResponses(request: Request, currentUser: { id: string; 
 
     await tx.delete(user).where(eq(user.id, guest.id))
   })
+  publishPollChange(matchedCompany.id)
 }
 
 async function readProfile(currentUser: { id: string; email: string }) {
@@ -105,6 +108,8 @@ async function readProfile(currentUser: { id: string; email: string }) {
   const isAdmin = userRow[0]?.role === 'admin' || adminRows.length > 0
   if (matchedCompany && (userRow[0]?.companyId !== matchedCompany.id || userRow[0]?.legacyCompany !== matchedCompany.name)) {
     await db.update(user).set({ company: matchedCompany.name, companyId: matchedCompany.id, updatedAt: new Date() }).where(eq(user.id, currentUser.id))
+    if (userRow[0]?.companyId) publishPollChange(userRow[0].companyId)
+    await refreshUserPolls(currentUser.id)
   }
   const availability: Record<Period, AttendanceStatus> = { morning: 'office', evening: 'office' }
   for (const row of availabilityRows) availability[row.period] = row.status
@@ -141,6 +146,7 @@ export const Route = createFileRoute('/api/profile')({
             await tx.insert(drinkDefault).values({ userId: currentUser.id, period, drink: validatedDefaults[period], sugar: validatedSugarDefaults[period] }).onConflictDoUpdate({ target: [drinkDefault.userId, drinkDefault.period], set: { drink: validatedDefaults[period], sugar: validatedSugarDefaults[period], updatedAt: new Date() } })
           }
         })
+        await refreshUserPolls(currentUser.id)
         return json(await readProfile(currentUser))
       },
       PATCH: async ({ request }) => {
@@ -150,6 +156,7 @@ export const Route = createFileRoute('/api/profile')({
         if (!isDate(body.date) || !isPeriod(body.period) || !isAttendanceStatus(body.status)) return json({ error: 'Invalid availability' }, { status: 400 })
         await db.insert(attendance).values({ id: crypto.randomUUID(), userId: currentUser.id, date: body.date, period: body.period, status: body.status, source: 'manual' })
           .onConflictDoUpdate({ target: [attendance.userId, attendance.date, attendance.period], set: { status: body.status, source: 'manual', updatedAt: new Date() } })
+        await refreshUserPolls(currentUser.id, body.date)
         return json({ date: body.date, period: body.period, status: body.status })
       },
     },

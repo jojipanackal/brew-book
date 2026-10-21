@@ -36,7 +36,10 @@ const config = defineConfig(({ mode }) => {
 		resolve: { tsconfigPaths: true },
 		plugins: [
 			devtools(),
-			nitro({ rollupConfig: { external: [/^@sentry\//] } }),
+			nitro({
+				plugins: ["./src/server/poll-scheduler.ts"],
+				rollupConfig: { external: [/^@sentry\//] },
+			}),
 			tailwindcss(),
 			tanstackStart(),
 			viteReact(),

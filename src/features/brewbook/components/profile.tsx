@@ -29,7 +29,8 @@ import {
 	type SugarChoice,
 	type User,
 } from "#/lib/drinks";
-import { periodDetails, todayKey } from "../constants";
+import { periodDetails } from "../constants";
+import { usePollClock } from "../hooks/use-poll-clock";
 import { compactName, cx, displayDate, initials, sourceLabel } from "../utils";
 import { MetaTag, PageHeader } from "./common";
 import { DefaultDrinkSetting } from "./drink-settings";
@@ -224,6 +225,7 @@ function MiniCalendar({
 	selected: string;
 	onSelect: (d: string) => void;
 }) {
+	const { date: todayKey } = usePollClock();
 	const [viewYear, setViewYear] = useState(() => Number(selected.slice(0, 4)));
 	const [viewMonth, setViewMonth] = useState(
 		() => Number(selected.slice(5, 7)) - 1,

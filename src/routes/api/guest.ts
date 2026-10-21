@@ -5,6 +5,7 @@ import { db } from '#/db'
 import { company, user } from '#/db/schema'
 import type { Company, Drink } from '#/lib/drinks'
 import { readDay } from './drinks'
+import { publishPollChange } from '#/lib/poll-events'
 
 const indiaDateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' })
 const todayKey = () => indiaDateFormatter.format(new Date())
@@ -24,7 +25,7 @@ function guestCookie(token: string, maxAge: number) {
 async function getGuest(request: Request) {
   const token = request.headers.get('cookie')?.match(/(?:^|;\s*)brewbook_guest=([^;]+)/)?.[1]
   if (!token) return null
-  const rows = await db.select({ id: user.id, name: user.name, email: user.email, image: user.image, status: user.guestStatus }).from(user).where(and(eq(user.guestToken, decodeURIComponent(token)), eq(user.isGuest, true), gt(user.guestExpiresAt, new Date()))).limit(1)
+  const rows = await db.select({ id: user.id, name: user.name, email: user.email, image: user.image, status: user.guestStatus, companyId: user.companyId }).from(user).where(and(eq(user.guestToken, decodeURIComponent(token)), eq(user.isGuest, true), gt(user.guestExpiresAt, new Date()))).limit(1)
   return rows[0] ?? null
 }
 
@@ -52,12 +53,14 @@ export const Route = createFileRoute('/api/guest')({
         const id = crypto.randomUUID()
         const token = crypto.randomUUID()
         const guest = { id, name, email: `guest-${id}@guest.brewbook.local`, image: null }
-        await db.insert(user).values({ id, name, email: guest.email, company: companyRow[0].name, companyId: companyRow[0].id, role: 'guest', isGuest: true, guestToken: token, guestStatus: 'pending', guestRequestedAt: new Date() })
+        await db.insert(user).values({ id, name, email: guest.email, company: companyRow[0].name, companyId: companyRow[0].id, role: 'guest', isGuest: true, guestToken: token, guestStatus: 'pending', guestRequestedAt: new Date(), guestExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) })
+        publishPollChange(companyRow[0].id)
         return json(await guestResponse({ ...guest, status: 'pending' }), { headers: { 'Set-Cookie': guestCookie(token, 24 * 60 * 60) } })
       },
       DELETE: async ({ request }) => {
         const guest = await getGuest(request)
         if (guest) await db.delete(user).where(eq(user.id, guest.id))
+        if (guest?.companyId) publishPollChange(guest.companyId)
         return json({ ok: true }, { headers: { 'Set-Cookie': guestCookie('', 0) } })
       },
     },

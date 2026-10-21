@@ -156,7 +156,6 @@ export const displayDateFormatter = new Intl.DateTimeFormat("en-US", {
 	year: "numeric",
 	timeZone: "Asia/Kolkata",
 });
-export const todayKey = dateFormatter.format(new Date());
 
 export const initialState: AppState = {
 	user: null,

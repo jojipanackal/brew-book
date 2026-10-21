@@ -14,6 +14,7 @@ import { Route as ApiAdminRouteImport } from './routes/api/admin'
 import { Route as ApiCompaniesRouteImport } from './routes/api/companies'
 import { Route as ApiCooksRouteImport } from './routes/api/cooks'
 import { Route as ApiDrinksRouteImport } from './routes/api/drinks'
+import { Route as ApiEventsRouteImport } from './routes/api/events'
 import { Route as ApiGuestRouteImport } from './routes/api/guest'
 import { Route as ApiProfileRouteImport } from './routes/api/profile'
 import { Route as ApiPushRouteImport } from './routes/api/push'
@@ -43,6 +44,11 @@ const ApiCooksRoute = ApiCooksRouteImport.update({
 const ApiDrinksRoute = ApiDrinksRouteImport.update({
   id: '/api/drinks',
   path: '/api/drinks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiEventsRoute = ApiEventsRouteImport.update({
+  id: '/api/events',
+  path: '/api/events',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiGuestRoute = ApiGuestRouteImport.update({
@@ -77,6 +83,7 @@ export interface FileRoutesByFullPath {
   '/api/companies': typeof ApiCompaniesRoute
   '/api/cooks': typeof ApiCooksRoute
   '/api/drinks': typeof ApiDrinksRoute
+  '/api/events': typeof ApiEventsRoute
   '/api/guest': typeof ApiGuestRoute
   '/api/profile': typeof ApiProfileRoute
   '/api/push': typeof ApiPushRoute
@@ -89,6 +96,7 @@ export interface FileRoutesByTo {
   '/api/companies': typeof ApiCompaniesRoute
   '/api/cooks': typeof ApiCooksRoute
   '/api/drinks': typeof ApiDrinksRoute
+  '/api/events': typeof ApiEventsRoute
   '/api/guest': typeof ApiGuestRoute
   '/api/profile': typeof ApiProfileRoute
   '/api/push': typeof ApiPushRoute
@@ -102,6 +110,7 @@ export interface FileRoutesById {
   '/api/companies': typeof ApiCompaniesRoute
   '/api/cooks': typeof ApiCooksRoute
   '/api/drinks': typeof ApiDrinksRoute
+  '/api/events': typeof ApiEventsRoute
   '/api/guest': typeof ApiGuestRoute
   '/api/profile': typeof ApiProfileRoute
   '/api/push': typeof ApiPushRoute
@@ -116,6 +125,7 @@ export interface FileRouteTypes {
     | '/api/companies'
     | '/api/cooks'
     | '/api/drinks'
+    | '/api/events'
     | '/api/guest'
     | '/api/profile'
     | '/api/push'
@@ -128,6 +138,7 @@ export interface FileRouteTypes {
     | '/api/companies'
     | '/api/cooks'
     | '/api/drinks'
+    | '/api/events'
     | '/api/guest'
     | '/api/profile'
     | '/api/push'
@@ -140,6 +151,7 @@ export interface FileRouteTypes {
     | '/api/companies'
     | '/api/cooks'
     | '/api/drinks'
+    | '/api/events'
     | '/api/guest'
     | '/api/profile'
     | '/api/push'
@@ -153,6 +165,7 @@ export interface RootRouteChildren {
   ApiCompaniesRoute: typeof ApiCompaniesRoute
   ApiCooksRoute: typeof ApiCooksRoute
   ApiDrinksRoute: typeof ApiDrinksRoute
+  ApiEventsRoute: typeof ApiEventsRoute
   ApiGuestRoute: typeof ApiGuestRoute
   ApiProfileRoute: typeof ApiProfileRoute
   ApiPushRoute: typeof ApiPushRoute
@@ -195,6 +208,13 @@ declare module '@tanstack/react-router' {
       path: '/api/drinks'
       fullPath: '/api/drinks'
       preLoaderRoute: typeof ApiDrinksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/events': {
+      id: '/api/events'
+      path: '/api/events'
+      fullPath: '/api/events'
+      preLoaderRoute: typeof ApiEventsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/guest': {
@@ -241,6 +261,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCompaniesRoute: ApiCompaniesRoute,
   ApiCooksRoute: ApiCooksRoute,
   ApiDrinksRoute: ApiDrinksRoute,
+  ApiEventsRoute: ApiEventsRoute,
   ApiGuestRoute: ApiGuestRoute,
   ApiProfileRoute: ApiProfileRoute,
   ApiPushRoute: ApiPushRoute,
