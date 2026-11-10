@@ -40,6 +40,7 @@ import { DrinkInfoSheet } from "./overlays";
 export function TodayView({
 	entry,
 	sugar,
+	availableDrinks = drinks,
 	todayPolls,
 	updateEntry,
 	updateSugar,
@@ -52,6 +53,7 @@ export function TodayView({
 }: {
 	entry: DrinkChoice;
 	sugar: SugarChoice;
+	availableDrinks?: readonly Drink[];
 	todayPolls: PollRecord[];
 	updateEntry: (period: Period, drink: Drink) => void;
 	updateSugar: (period: Period, sugar: boolean) => void;
@@ -121,6 +123,7 @@ export function TodayView({
 								closed={isPeriodClosed(period.id)}
 								closedMessage="Poll closed"
 								polls={todayPolls}
+								availableDrinks={availableDrinks}
 								selected={entry[period.id]}
 								sugar={sugar[period.id]}
 								editable={
@@ -337,6 +340,7 @@ function DrinkPoll({
 	closed = false,
 	closedMessage = "Poll closed",
 	polls,
+	availableDrinks = drinks,
 	selected,
 	sugar,
 	editable,
@@ -348,6 +352,7 @@ function DrinkPoll({
 	closed?: boolean;
 	closedMessage?: string;
 	polls: PollRecord[];
+	availableDrinks?: readonly Drink[];
 	selected?: Drink;
 	sugar: boolean;
 	editable: boolean;
@@ -394,7 +399,7 @@ function DrinkPoll({
 				</Banner>
 			)}
 			<div className="grid gap-2 p-3 sm:p-4">
-				{drinks.map((drink) => {
+				{availableDrinks.map((drink) => {
 					const count = counts[drink];
 					const percent = total ? Math.round((counts[drink] / total) * 100) : 0;
 					return (

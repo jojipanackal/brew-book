@@ -39,6 +39,7 @@ export function ProfileView({
 	user,
 	defaults,
 	sugarDefaults,
+	availableDrinks,
 	updateDefault,
 	onSignOut,
 	isGuest,
@@ -52,6 +53,7 @@ export function ProfileView({
 	user: User;
 	defaults: DrinkChoice;
 	sugarDefaults: SugarChoice;
+	availableDrinks: readonly Drink[];
 	updateDefault: (period: Period, drink: Drink, sugar: boolean) => void;
 	onSignOut: () => void;
 	isGuest: boolean;
@@ -134,6 +136,7 @@ export function ProfileView({
 										<DefaultDrinkSetting
 											key={period.id}
 											period={period}
+											availableDrinks={availableDrinks}
 											selected={defaults[period.id]}
 											sugar={sugarDefaults[period.id]}
 											onSelect={(drink) =>

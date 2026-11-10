@@ -2,9 +2,9 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { db } from '#/db'
-import { attendance, company, companyAdmin, drinkResponse, user } from '#/db/schema'
+import { attendance, company, companyAdmin, drinkDefault, drinkResponse, user, userTag } from '#/db/schema'
 import { auth } from '#/lib/auth'
-import { drinks, periods, type AttendanceStatus, type Drink, type Period } from '#/lib/drinks'
+import { crmDrinks, drinks, periods, type AttendanceStatus, type Drink, type Period, userTags as validUserTags } from '#/lib/drinks'
 import { ensureTodayResponses, openPeriodsForToday } from '#/lib/poll-responses'
 import { readDay } from './drinks'
 import { publishPollChange } from '#/lib/poll-events'
@@ -23,6 +23,7 @@ function isPeriodList(value: unknown): value is Period[] {
 function isDrink(value: unknown): value is Drink { return typeof value === 'string' && drinks.includes(value as Drink) }
 function isAttendanceStatus(value: unknown): value is AttendanceStatus { return value === 'office' || value === 'wfh' || value === 'leave' }
 function isDate(value: unknown): value is string { return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) }
+function isUserTag(value: unknown): value is (typeof validUserTags)[number] { return typeof value === 'string' && validUserTags.includes(value as (typeof validUserTags)[number]) }
 
 async function getAdmin(request: Request) {
   const session = await auth.api.getSession({ headers: request.headers })
@@ -43,6 +44,11 @@ async function canManage(admin: { companyIds: string[] | null }, targetId: strin
   return Boolean(target[0]?.companyId && admin.companyIds.includes(target[0].companyId))
 }
 
+async function hasCrmTag(userId: string) {
+  const rows = await db.select({ tag: userTag.tag }).from(userTag).where(and(eq(userTag.userId, userId), eq(userTag.tag, 'CRM'))).limit(1)
+  return rows.length > 0
+}
+
 export const Route = createFileRoute('/api/admin')({
   server: {
     handlers: {
@@ -59,7 +65,7 @@ export const Route = createFileRoute('/api/admin')({
       POST: async ({ request }) => {
         const admin = await getAdmin(request)
         if (!admin) return json({ error: 'Admin access required' }, { status: 403 })
-        const body = await request.json() as { type?: unknown; userId?: unknown; period?: unknown; periods?: unknown; drink?: unknown; sugar?: unknown; status?: unknown; date?: unknown; onLeave?: unknown }
+        const body = await request.json() as { type?: unknown; userId?: unknown; period?: unknown; periods?: unknown; drink?: unknown; sugar?: unknown; status?: unknown; date?: unknown; onLeave?: unknown; tags?: unknown }
         if (typeof body.userId !== 'string' || !await canManage(admin, body.userId)) return json({ error: 'User is outside your company' }, { status: 403 })
         const target = (await db.select({ companyId: user.companyId }).from(user).where(eq(user.id, body.userId)).limit(1))[0]
         const changed = async () => {
@@ -74,6 +80,27 @@ export const Route = createFileRoute('/api/admin')({
           if (body.userId === admin.userId) return json({ error: 'You cannot delete your own account' }, { status: 400 })
           const deleted = await db.delete(user).where(eq(user.id, body.userId)).returning({ id: user.id })
           if (!deleted.length) return json({ error: 'User not found' }, { status: 404 })
+          return changed()
+        }
+        if (body.type === 'tags') {
+          if (!Array.isArray(body.tags) || new Set(body.tags).size !== body.tags.length || !body.tags.every(isUserTag)) return json({ error: 'Invalid user tags' }, { status: 400 })
+          const tags = body.tags as Array<(typeof validUserTags)[number]>
+          await db.transaction(async (tx) => {
+            await tx.delete(userTag).where(eq(userTag.userId, body.userId as string))
+            if (tags.length) await tx.insert(userTag).values(tags.map((tag) => ({ userId: body.userId as string, tag })))
+            if (tags.includes('CRM')) {
+              const defaults = await tx.select({ period: drinkDefault.period, drink: drinkDefault.drink }).from(drinkDefault).where(eq(drinkDefault.userId, body.userId as string))
+              for (const preference of defaults) {
+                if (preference.drink !== 'No drink') {
+                  await tx.update(drinkDefault).set({ drink: 'Coffee', updatedAt: new Date() }).where(and(eq(drinkDefault.userId, body.userId as string), eq(drinkDefault.period, preference.period)))
+                }
+              }
+				const responses = await tx.select({ id: drinkResponse.id, drink: drinkResponse.drink }).from(drinkResponse).where(and(eq(drinkResponse.userId, body.userId as string), eq(drinkResponse.date, todayKey())))
+				for (const response of responses) {
+				  if (response.drink !== 'No drink') await tx.update(drinkResponse).set({ drink: 'Coffee', updatedAt: new Date() }).where(eq(drinkResponse.id, response.id))
+				}
+            }
+          })
           return changed()
         }
         if (body.type === 'approve') {
@@ -91,6 +118,7 @@ export const Route = createFileRoute('/api/admin')({
           return changed()
         }
         if (body.type === 'response' && isPeriod(body.period) && isDrink(body.drink) && typeof body.sugar === 'boolean') {
+          if (await hasCrmTag(body.userId) && !crmDrinks.includes(body.drink)) return json({ error: 'CRM users can only choose Coffee or No drink' }, { status: 400 })
           const sugar = body.drink === 'No drink' ? true : body.sugar
           const responseDate = isDate(body.date) ? body.date : todayKey()
           await db.insert(drinkResponse).values({ id: crypto.randomUUID(), userId: body.userId, date: responseDate, period: body.period, drink: body.drink, sugar, source: 'admin' }).onConflictDoUpdate({ target: [drinkResponse.userId, drinkResponse.date, drinkResponse.period], set: { drink: body.drink, sugar, source: 'admin', updatedAt: new Date() } })

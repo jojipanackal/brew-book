@@ -16,6 +16,7 @@ export const drinkSource = pgEnum('drink_source', ['default', 'manual', 'admin']
 export const userRole = pgEnum('user_role', ['user', 'admin', 'guest'])
 export const guestStatus = pgEnum('guest_status', ['pending', 'approved', 'rejected'])
 export const attendanceStatus = pgEnum('attendance_status', ['office', 'wfh', 'leave'])
+export const userTagType = pgEnum('user_tag_type', ['Tech', 'CRM'])
 
 export const company = pgTable('company', {
   id: text('id').primaryKey(),
@@ -46,6 +47,15 @@ export const user = pgTable('user', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })
+
+export const userTag = pgTable(
+  'user_tag',
+  {
+    userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+    tag: userTagType('tag').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.tag] }), index('user_tag_tag_idx').on(table.tag)],
+)
 
 export const companyAdmin = pgTable(
   'company_admin',

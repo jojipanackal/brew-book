@@ -19,6 +19,7 @@ import {
 	type AdminDashboard,
 	type AttendanceStatus,
 	type Cook,
+	crmDrinks,
 	calculatePollResults,
 	createCook,
 	type Drink,
@@ -32,6 +33,9 @@ import {
 	type PollResults,
 	type PollSource,
 	periods,
+	type UserTag,
+	userTags,
+	updateUserTags,
 	updateCook,
 	updateGuestRequest,
 	updateUserAvailability,
@@ -597,6 +601,7 @@ export function AdminView({
 }) {
 	const [openUserId, setOpenUserId] = useState<string | null>(null);
 	const [userSearch, setUserSearch] = useState("");
+	const [tagFilter, setTagFilter] = useState<"all" | UserTag>("all");
 	const [adminTab, setAdminTab] = useState<"today" | "results" | "cooks">(
 		"today",
 	);
@@ -615,7 +620,8 @@ export function AdminView({
 			return (
 				!query ||
 				`${poll.user.name} ${poll.user.email}`.toLowerCase().includes(query)
-			);
+			) &&
+			(tagFilter === "all" || poll.user.tags?.includes(tagFilter))
 		}) ?? [];
 
 	useEffect(() => {
@@ -714,23 +720,41 @@ export function AdminView({
 					<h2 className="text-sm font-semibold text-[var(--c-text-dark)]">
 						Users
 					</h2>
-					<div className="relative mt-3">
-						<Input
-							aria-label="Search users"
-							className="pr-10"
-							onChange={(event) => setUserSearch(event.target.value)}
-							placeholder="Search users by name or email"
-							value={userSearch}
-						/>
-						{userSearch && (
-							<IconButton
-								className="absolute right-1 top-1 size-8"
-								onClick={() => setUserSearch("")}
-								aria-label="Clear user search"
-							>
-								<XIcon size={15} />
-							</IconButton>
-						)}
+					<div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem]">
+						<div className="relative">
+							<Input
+								aria-label="Search users"
+								className="pr-10"
+								onChange={(event) => setUserSearch(event.target.value)}
+								placeholder="Search users by name or email"
+								value={userSearch}
+							/>
+							{userSearch && (
+								<IconButton
+									className="absolute right-1 top-1 size-8"
+									onClick={() => setUserSearch("")}
+									aria-label="Clear user search"
+								>
+									<XIcon size={15} />
+								</IconButton>
+							)}
+						</div>
+						<Select
+							value={tagFilter}
+							onValueChange={(value) => setTagFilter(value as typeof tagFilter)}
+						>
+							<SelectTrigger aria-label="Filter users by tag">
+								<SelectValue placeholder="All tags" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">All tags</SelectItem>
+								{userTags.map((tag) => (
+									<SelectItem key={tag} value={tag}>
+										{tag}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
 					</div>
 					<div className="mt-3 grid gap-3">
 						{filteredUsers.map((poll) => {
@@ -821,6 +845,7 @@ function AdminResponseRow({
 	onRefresh: () => void;
 }) {
 	const [leaveSaving, setLeaveSaving] = useState<"full" | Period | null>(null);
+	const [tagsSaving, setTagsSaving] = useState<UserTag | null>(null);
 	const [deleteSaving, setDeleteSaving] = useState(false);
 	const [actionError, setActionError] = useState("");
 	const fullDayLeave = periods.every(
@@ -883,6 +908,23 @@ function AdminResponseRow({
 			onRefresh,
 		);
 	};
+	const toggleTag = (tag: UserTag) => {
+		if (!poll.user.id || tagsSaving) return;
+		const currentTags = poll.user.tags ?? [];
+		const tags = currentTags.includes(tag)
+			? currentTags.filter((item) => item !== tag)
+			: [...currentTags, tag];
+		setActionError("");
+		setTagsSaving(tag);
+		void updateUserTags({ userId: poll.user.id, tags })
+			.then(onRefresh)
+			.catch((err) =>
+				setActionError(
+					err instanceof Error ? err.message : "Failed to update tags",
+				),
+			)
+			.finally(() => setTagsSaving(null));
+	};
 	return (
 		<ListRow className="flex-col items-stretch py-3">
 			<Button
@@ -896,6 +938,13 @@ function AdminResponseRow({
 					<p className="truncate text-sm font-semibold">
 						{compactName(poll.user)}
 					</p>
+					{poll.user.tags && poll.user.tags.length > 0 && (
+						<div className="mt-1 flex flex-wrap gap-1">
+							{poll.user.tags.map((tag) => (
+								<MetaTag key={tag}>{tag}</MetaTag>
+							))}
+						</div>
+					)}
 					<p className="mt-1 truncate text-xs text-[var(--c-text-muted)]">
 						Morning: {poll.choices.morning} · Evening: {poll.choices.evening}
 					</p>
@@ -910,6 +959,33 @@ function AdminResponseRow({
 			</Button>
 			{expanded && (
 				<div className="mt-3 border-t border-[var(--c-border)] pt-3">
+					<div className="mb-4">
+						<p className="text-[11px] font-semibold text-[var(--c-text-muted)]">
+							User tags
+						</p>
+						<div className="mt-2 flex flex-wrap gap-2">
+							{userTags.map((tag) => {
+								const active = poll.user.tags?.includes(tag) ?? false;
+								return (
+									<Button
+										key={tag}
+										type="button"
+										size="sm"
+										variant={active ? "primary" : "outline"}
+										disabled={tagsSaving !== null}
+										onClick={() => toggleTag(tag)}
+									>
+										{tag}
+									</Button>
+								);
+							})}
+						</div>
+						{poll.user.tags?.includes("CRM") && (
+							<p className="mt-2 text-xs text-[var(--c-text-muted)]">
+								CRM users can choose Coffee or No drink.
+							</p>
+						)}
+					</div>
 					<AdminLeaveControls
 						availability={poll.availability}
 						fullDayLeave={fullDayLeave}
@@ -926,6 +1002,7 @@ function AdminResponseRow({
 							<AdminPeriodControl
 								key={period}
 								period={period}
+								availableDrinks={poll.user.tags?.includes("CRM") ? crmDrinks : drinks}
 								drink={poll.choices[period]}
 								sugar={poll.sugar[period]}
 								source={poll.sources[period]}
@@ -1023,6 +1100,7 @@ function AdminLeaveControls({
 
 function AdminPeriodControl({
 	period,
+	availableDrinks,
 	drink,
 	sugar,
 	source,
@@ -1032,6 +1110,7 @@ function AdminPeriodControl({
 	onAvailabilityChange,
 }: {
 	period: Period;
+	availableDrinks: readonly Drink[];
 	drink: Drink;
 	sugar: boolean;
 	source: PollSource;
@@ -1056,7 +1135,7 @@ function AdminPeriodControl({
 					<SelectValue />
 				</SelectTrigger>
 				<SelectContent>
-					{drinks.map((item) => (
+					{availableDrinks.map((item) => (
 						<SelectItem value={item} key={item}>
 							{item}
 						</SelectItem>

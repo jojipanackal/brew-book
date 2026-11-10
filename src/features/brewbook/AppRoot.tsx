@@ -5,9 +5,11 @@ import {
 	type AdminDashboard,
 	type AttendanceStatus,
 	type Company,
+	crmDrinks,
 	completeOnboarding,
 	createGuest,
 	type Drink,
+	drinks,
 	type GuestSession,
 	getAdminDashboard,
 	getDrinkDay,
@@ -210,6 +212,7 @@ function App() {
 	const todaysSugar = todayPoll?.sugar ?? state.sugarDefaults;
 	const todayPolls = state.entries[todayKey] ?? [];
 	const isGuest = Boolean(guestSession);
+	const availableDrinks = state.user?.tags?.includes("CRM") ? crmDrinks : drinks;
 	const visibleView: View = isGuest ? "today" : view;
 	const signInError = authErrorMessage();
 	useEffect(() => {
@@ -312,6 +315,7 @@ function App() {
 						user: {
 							...user,
 							role: profile.role,
+							tags: profile.tags,
 							isOnLeave: profile.isOnLeave,
 							availability: profile.availability,
 						},
@@ -336,6 +340,8 @@ function App() {
 							user: {
 								...user,
 								role: profile.role,
+								tags:
+									day.responses.find((entry) => entry.user.email === user.email)?.user.tags ?? profile.tags,
 								isOnLeave: profile.isOnLeave,
 								availability:
 									day.responses.find((entry) => entry.user.email === user.email)
@@ -395,16 +401,23 @@ function App() {
 					...current,
 					defaults: day.defaults,
 					sugarDefaults: day.sugarDefaults,
-					user:
-						current.user && date === todayKey
-							? {
-									...current.user,
-									availability:
-										day.responses.find(
-											(entry) => entry.user.email === current.user?.email,
-										)?.availability ?? day.availability,
-								}
-							: current.user,
+					user: current.user
+						? {
+								...current.user,
+								tags:
+									day.responses.find(
+										(entry) => entry.user.email === current.user?.email,
+									)?.user.tags ?? current.user.tags,
+								...(date === todayKey
+									? {
+											availability:
+												day.responses.find(
+													(entry) => entry.user.email === current.user?.email,
+												)?.availability ?? day.availability,
+										}
+									: {}),
+							}
+						: current.user,
 					entries: { ...current.entries, [date]: day.responses },
 				}));
 			}
@@ -807,6 +820,7 @@ function App() {
 								todayPolls={todayPolls}
 								updateEntry={updateEntry}
 								updateSugar={updateSugar}
+								availableDrinks={availableDrinks}
 								onOpen={(period) => setOpenPoll({ date: todayKey, period })}
 								availability={state.user.availability}
 								onUpdateAvailability={updateAvailability}
@@ -820,6 +834,7 @@ function App() {
 								user={state.user}
 								defaults={state.defaults}
 								sugarDefaults={state.sugarDefaults}
+								availableDrinks={availableDrinks}
 								updateDefault={updateDefault}
 								onSignOut={signOut}
 								isGuest={isGuest}

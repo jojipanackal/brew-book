@@ -2,9 +2,9 @@ import { and, eq, gt, inArray } from 'drizzle-orm'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { db } from '#/db'
-import { attendance, drinkDefault, drinkResponse, user } from '#/db/schema'
+import { attendance, drinkDefault, drinkResponse, user, userTag } from '#/db/schema'
 import { auth } from '#/lib/auth'
-import { drinks, periods, type AttendanceStatus, type Drink, type DrinkChoice, type Period, type PollSource, type SugarChoice } from '#/lib/drinks'
+import { crmDrinks, drinks, periods, type AttendanceStatus, type Drink, type DrinkChoice, type Period, type PollSource, type SugarChoice } from '#/lib/drinks'
 import { currentlyOpenPeriods, ensureTodayResponses, openPeriodsForToday, todayKey } from '#/lib/poll-responses'
 import { refreshUserPolls } from '#/lib/poll-updates'
 
@@ -44,6 +44,11 @@ function defaultsFromRows(rows: Array<{ period: Period; drink: Drink; sugar: boo
   return { defaults, sugarDefaults }
 }
 
+async function hasCrmTag(userId: string) {
+  const rows = await db.select({ tag: userTag.tag }).from(userTag).where(and(eq(userTag.userId, userId), eq(userTag.tag, 'CRM'))).limit(1)
+  return rows.length > 0
+}
+
 export async function readDay(userId: string | undefined, date: string) {
   const [defaultRows, currentUserRows] = await Promise.all([
     userId ? db.select({ period: drinkDefault.period, drink: drinkDefault.drink, sugar: drinkDefault.sugar }).from(drinkDefault).where(eq(drinkDefault.userId, userId)) : Promise.resolve([]),
@@ -64,11 +69,14 @@ export async function readDay(userId: string | undefined, date: string) {
     .from(attendance).where(eq(attendance.date, date))
   const members = await db.select({ id: user.id, name: user.name, email: user.email, image: user.image })
     .from(user).where(companyId ? eq(user.companyId, companyId) : undefined)
+  const tagRows = await db.select({ userId: userTag.userId, tag: userTag.tag }).from(userTag)
+  const tagsByUser = new Map<string, Array<typeof tagRows[number]['tag']>>()
+  for (const row of tagRows) tagsByUser.set(row.userId, [...(tagsByUser.get(row.userId) ?? []), row.tag])
 
-  const grouped = new Map<string, { user: { id: string; name: string; email: string; image: string | null }; choices: Partial<DrinkChoice>; sugar: Partial<SugarChoice>; sources: Partial<Record<Period, PollSource>>; availability: Partial<Record<Period, AttendanceStatus>>; availabilitySources: Partial<Record<Period, PollSource>> }>()
-  for (const member of members) grouped.set(member.id, { user: member, choices: {}, sugar: {}, sources: {}, availability: {}, availabilitySources: {} })
+  const grouped = new Map<string, { user: { id: string; name: string; email: string; image: string | null; tags: Array<typeof tagRows[number]['tag']> }; choices: Partial<DrinkChoice>; sugar: Partial<SugarChoice>; sources: Partial<Record<Period, PollSource>>; availability: Partial<Record<Period, AttendanceStatus>>; availabilitySources: Partial<Record<Period, PollSource>> }>()
+  for (const member of members) grouped.set(member.id, { user: { ...member, tags: tagsByUser.get(member.id) ?? [] }, choices: {}, sugar: {}, sources: {}, availability: {}, availabilitySources: {} })
   for (const row of responseRows) {
-    const existing = grouped.get(row.userId) ?? { user: { id: row.userId, name: row.name, email: row.email, image: row.image }, choices: {}, sugar: {}, sources: {}, availability: {}, availabilitySources: {} }
+    const existing = grouped.get(row.userId) ?? { user: { id: row.userId, name: row.name, email: row.email, image: row.image, tags: tagsByUser.get(row.userId) ?? [] }, choices: {}, sugar: {}, sources: {}, availability: {}, availabilitySources: {} }
     existing.choices[row.period] = row.drink
     existing.sugar[row.period] = row.sugar
     existing.sources[row.period] = row.source
@@ -122,6 +130,7 @@ export const Route = createFileRoute('/api/drinks')({
         if (body.type === 'default') {
           if (currentUser.email.endsWith('@guest.brewbook.local')) return json({ error: 'Guests cannot set defaults' }, { status: 403 })
           if (!isPeriod(body.period) || !isDrink(body.drink) || typeof body.sugar !== 'boolean') return json({ error: 'Invalid default' }, { status: 400 })
+          if (await hasCrmTag(currentUser.id) && !crmDrinks.includes(body.drink)) return json({ error: 'CRM users can only choose Coffee or No drink' }, { status: 400 })
           const sugar = body.drink === 'No drink' ? true : body.sugar
           await db.insert(drinkDefault).values({ userId: currentUser.id, period: body.period, drink: body.drink, sugar }).onConflictDoUpdate({ target: [drinkDefault.userId, drinkDefault.period], set: { drink: body.drink, sugar, updatedAt: new Date() } })
           await db.update(drinkResponse).set({ drink: body.drink, sugar, updatedAt: new Date() }).where(and(eq(drinkResponse.userId, currentUser.id), eq(drinkResponse.date, todayKey()), eq(drinkResponse.period, body.period), eq(drinkResponse.source, 'default'), inArray(drinkResponse.period, currentlyOpenPeriods())))
@@ -131,6 +140,7 @@ export const Route = createFileRoute('/api/drinks')({
         }
         if (body.type === 'response') {
           if (!isDate(body.date) || !isPeriod(body.period) || !isDrink(body.drink) || typeof body.sugar !== 'boolean') return json({ error: 'Invalid response' }, { status: 400 })
+          if (await hasCrmTag(currentUser.id) && !crmDrinks.includes(body.drink)) return json({ error: 'CRM users can only choose Coffee or No drink' }, { status: 400 })
           if (currentUser.email.endsWith('@guest.brewbook.local') && body.date !== todayKey()) return json({ error: 'Guest responses are valid for today only' }, { status: 400 })
           if (body.date === todayKey() && !currentlyOpenPeriods().includes(body.period)) return json({ error: `${body.period === 'morning' ? 'Morning' : 'Evening'} poll is closed` }, { status: 400 })
           const defaults = await readDay(currentUser.id, body.date)

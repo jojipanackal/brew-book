@@ -2,7 +2,7 @@ import { and, eq, gt } from 'drizzle-orm'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { db } from '#/db'
-import { attendance, company, companyAdmin, drinkDefault, drinkResponse, user } from '#/db/schema'
+import { attendance, company, companyAdmin, drinkDefault, drinkResponse, user, userTag } from '#/db/schema'
 import { auth } from '#/lib/auth'
 import { drinks, periods, type AttendanceStatus, type Company, type Drink, type DrinkChoice, type Period, type SugarChoice } from '#/lib/drinks'
 import { publishPollChange } from '#/lib/poll-events'
@@ -94,12 +94,13 @@ async function claimGuestResponses(request: Request, currentUser: { id: string; 
 
 async function readProfile(currentUser: { id: string; email: string }) {
   const normalizedEmail = currentUser.email.trim().toLowerCase()
-  const [userRow, defaultRows, companyRows, adminRows, availabilityRows] = await Promise.all([
+  const [userRow, defaultRows, companyRows, adminRows, availabilityRows, tagRows] = await Promise.all([
     db.select({ companyId: user.companyId, legacyCompany: user.company, role: user.role, isOnLeave: user.isOnLeave }).from(user).where(eq(user.id, currentUser.id)).limit(1),
     db.select({ period: drinkDefault.period, drink: drinkDefault.drink, sugar: drinkDefault.sugar }).from(drinkDefault).where(eq(drinkDefault.userId, currentUser.id)),
     db.select({ id: company.id, name: company.name, emailEnding1: company.emailEnding1, emailEnding2: company.emailEnding2 }).from(company),
     db.select({ email: companyAdmin.email }).from(companyAdmin).where(eq(companyAdmin.email, normalizedEmail)),
     db.select({ period: attendance.period, status: attendance.status }).from(attendance).where(and(eq(attendance.userId, currentUser.id), eq(attendance.date, todayKey()))),
+    db.select({ tag: userTag.tag }).from(userTag).where(eq(userTag.userId, currentUser.id)),
   ])
   const email = currentUser.email.trim().toLowerCase()
   const matchedCompany = companyRows.find((item) => [item.emailEnding1, item.emailEnding2].some((ending) => ending && email.endsWith(ending.trim().toLowerCase())))
@@ -113,7 +114,7 @@ async function readProfile(currentUser: { id: string; email: string }) {
   }
   const availability: Record<Period, AttendanceStatus> = { morning: 'office', evening: 'office' }
   for (const row of availabilityRows) availability[row.period] = row.status
-  return { company: companyName, requiresCompany: false, accessDenied, needsOnboarding: !accessDenied && defaultRows.length < periods.length, role: isAdmin ? 'admin' as const : 'user' as const, isOnLeave: userRow[0]?.isOnLeave ?? false, availability, ...defaultsFromRows(defaultRows) }
+  return { company: companyName, requiresCompany: false, accessDenied, needsOnboarding: !accessDenied && defaultRows.length < periods.length, role: isAdmin ? 'admin' as const : 'user' as const, isOnLeave: userRow[0]?.isOnLeave ?? false, availability, tags: tagRows.map((row) => row.tag), ...defaultsFromRows(defaultRows) }
 }
 
 export const Route = createFileRoute('/api/profile')({

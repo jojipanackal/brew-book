@@ -6,12 +6,14 @@ import { SugarToggle } from "./common";
 
 export function DefaultDrinkSetting({
 	period,
+	availableDrinks = drinks,
 	selected,
 	sugar,
 	onSelect,
 	onToggleSugar,
 }: {
 	period: { id: Period; label: string; helper: string };
+	availableDrinks?: readonly Drink[];
 	selected: Drink;
 	sugar: boolean;
 	onSelect: (drink: Drink) => void;
@@ -36,7 +38,7 @@ export function DefaultDrinkSetting({
 				/>
 			</div>
 			<div className="mt-4 grid grid-cols-1 gap-2">
-				{drinks.map((drink) => (
+				{availableDrinks.map((drink) => (
 					<Button
 						key={drink}
 						onClick={() => onSelect(drink)}
