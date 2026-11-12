@@ -14,22 +14,22 @@ test("IST rolls over independently of the server timezone", () => {
 });
 
 test("cutoffs and the next boundary are exact and strictly in the future", () => {
-	const before = new Date("2026-10-21T10:59:59+05:30");
+	const before = new Date("2026-10-21T10:14:59+05:30");
 	assert.ok(getPollClock(before).minutes < pollCutoffs.morning);
 	assert.equal(
 		nextPollBoundary(before),
-		Date.parse("2026-10-21T11:00:00+05:30"),
+		Date.parse("2026-10-21T10:15:00+05:30"),
 	);
 	assert.equal(
-		getPollClock(new Date("2026-10-21T11:00:00+05:30")).minutes,
+		getPollClock(new Date("2026-10-21T10:15:00+05:30")).minutes,
 		pollCutoffs.morning,
 	);
 	assert.equal(
-		nextPollBoundary(new Date("2026-10-21T11:00:00+05:30")),
-		Date.parse("2026-10-21T15:15:00+05:30"),
+		nextPollBoundary(new Date("2026-10-21T10:15:00+05:30")),
+		Date.parse("2026-10-21T15:00:00+05:30"),
 	);
 	assert.equal(
-		nextPollBoundary(new Date("2026-10-21T15:15:00+05:30")),
+		nextPollBoundary(new Date("2026-10-21T15:00:00+05:30")),
 		Date.parse("2026-10-22T00:00:00+05:30"),
 	);
 });

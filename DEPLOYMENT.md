@@ -88,7 +88,7 @@ Caddy automatically flushes responses with `Content-Type: text/event-stream`, wh
 
 Do not enable `response_buffers` for `/api/events` or configure short stream/read/write timeouts that would cut off the connection. The application sends `Cache-Control: no-cache, no-transform`; ensure any additional proxy/CDN forwards the stream without buffering or caching. The `X-Accel-Buffering: no` response header is an Nginx compatibility hint and requires no Caddy configuration.
 
-The Nitro startup plugin reconciles daily responses at startup and midnight IST, and notifies clients at the 11:00/15:15 cutoffs. Failed reconciliation retries after 30 seconds; reads retain idempotent initialization as recovery. Browser dates/cutoffs update locally without HTTP polling.
+The Nitro startup plugin reconciles daily responses at startup and midnight IST, and notifies clients at the 10:15/15:00 cutoffs. Failed reconciliation retries after 30 seconds; reads retain idempotent initialization as recovery. Browser dates/cutoffs update locally without HTTP polling.
 
 **Deployment constraint:** notifications are in-process. Run one Node app process/container, as in this Compose file. Before adding replicas, clustered workers, or external database writers, introduce shared notifications (for example PostgreSQL `LISTEN/NOTIFY`) and coordinated scheduling. Direct database edits do not currently emit SSE events.
 

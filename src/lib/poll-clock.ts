@@ -1,6 +1,6 @@
 // IST has no daylight-saving transitions. Keep server and browser cutoffs identical.
 const offset = 330 * 60_000;
-export const pollCutoffs = { morning: 11 * 60, evening: 15 * 60 + 15 };
+export const pollCutoffs = { morning: 10 * 60 + 15, evening: 15 * 60 };
 
 export function getPollClock(now = new Date()) {
 	const local = new Date(now.getTime() + offset);
